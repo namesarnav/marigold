@@ -1,4 +1,7 @@
-const BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/+$/, "");
+const BASE = (import.meta.env.DEV
+  ? (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000")
+  : ""
+).replace(/\/+$/, "");
 
 function getToken() {
   return localStorage.getItem("access_token");
