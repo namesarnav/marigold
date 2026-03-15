@@ -165,9 +165,6 @@ export default function EditCards({ docId, docName, onBack }) {
     <div className="animate-fade-up">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <button onClick={onBack} className="text-xs font-sans text-fl-muted hover:text-fl-black transition-colors mb-1 flex items-center gap-1">
-            ← Back
-          </button>
           <h2 className="text-2xl font-serif text-fl-black">Edit cards</h2>
           <p className="text-sm text-fl-muted font-sans mt-0.5">{docName}</p>
         </div>

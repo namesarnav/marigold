@@ -324,7 +324,7 @@ export default function Dashboard() {
                     <DocMenu
                       doc={doc}
                       onRename={() => setRenamingId(doc.id)}
-                      onEditCards={() => navigate(`/deck/${doc.id}`)}
+                      onEditCards={() => navigate(`/deck/${doc.id}?edit=1`)}
                       onDelete={() => handleDelete(doc.id)}
                     />
                   </div>
