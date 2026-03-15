@@ -1,5 +1,8 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_settings
@@ -33,3 +36,8 @@ app.include_router(documents.router)
 app.include_router(flashcards.router)
 app.include_router(quiz.router)
 app.include_router(stats.router)
+
+# Serve the built frontend (production)
+_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
+if os.path.isdir(_dist):
+    app.mount("/", StaticFiles(directory=_dist, html=True), name="frontend")
