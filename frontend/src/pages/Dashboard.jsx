@@ -103,7 +103,7 @@ function Sidebar({ view, setView, user, onLogout }) {
   return (
     <aside className="hidden md:flex flex-col w-60 border-r border-fl-border bg-cream shrink-0 min-h-screen">
       <div className="flex items-center gap-2 px-6 py-5 border-b border-fl-border">
-        <div className="h-7 w-7 rounded-lg bg-fl-yellow flex items-center justify-center text-fl-black text-xs font-bold font-sans">M</div>
+        <div className="h-7 w-7 rounded-lg bg-fl-yellow flex items-center justify-center text-fl-black text-xs font-bold font-sans">🌼</div>
         <span className="font-serif text-lg text-fl-black">Marigold</span>
       </div>
 
