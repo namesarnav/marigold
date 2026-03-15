@@ -1,0 +1,837 @@
+openapi: 3.0.3
+info:
+  title: Marigold API
+  description: >
+    Study app — upload PDFs, get AI-generated flashcards, take timed quizzes.
+    All routes except `/api/auth/*` require a Bearer token in the
+    `Authorization` header (or an active session cookie).
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://your-app.up.railway.app
+    description: Production (Railway)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+    description: Register, login, token refresh, logout
+  - name: documents
+    description: PDF upload and document management
+  - name: flashcards
+    description: Flashcard CRUD and AI regeneration
+  - name: quiz
+    description: Quiz sessions, answers, results
+  - name: stats
+    description: User statistics and streak
+
+# ─────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────
+paths:
+
+  # ── Auth ──────────────────────────────────
+
+  /api/auth/register:
+    post:
+      tags: [auth]
+      summary: Create a new account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: alice@example.com
+              password: secret123
+              name: Alice
+      responses:
+        '200':
+          description: Account created; access token returned, refresh token set as httpOnly cookie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Sign in to an existing account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: alice@example.com
+              password: secret123
+      responses:
+        '200':
+          description: Signed in; access token returned, refresh token set as httpOnly cookie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotate refresh token and get a new access token
+      description: Reads the `refresh_token` httpOnly cookie. Issues a new access token and rotates the refresh token.
+      security: []
+      responses:
+        '200':
+          description: New access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke refresh token and clear session
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out
+
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: Get the current user's profile
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Documents ─────────────────────────────
+
+  /api/documents/upload:
+    post:
+      tags: [documents]
+      summary: Upload a PDF and generate flashcards
+      description: >
+        Accepts a PDF file, extracts text with PyMuPDF, generates 15 flashcards
+        via Gemini, and stores them. Returns the new document ID.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file (must end in .pdf)
+      responses:
+        '200':
+          description: Upload successful; flashcards generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          description: Not a PDF, or no extractable text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '500':
+          description: Gemini generation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+
+  /api/documents:
+    get:
+      tags: [documents]
+      summary: List all documents for the current user
+      responses:
+        '200':
+          description: Array of documents, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentOut'
+
+  /api/documents/{doc_id}:
+    get:
+      tags: [documents]
+      summary: Get a single document by ID
+      parameters:
+        - $ref: '#/components/parameters/DocId'
+      responses:
+        '200':
+          description: Document found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [documents]
+      summary: Rename a document
+      parameters:
+        - $ref: '#/components/parameters/DocId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentPatch'
+            example:
+              filename: Lecture 3 — Neurons.pdf
+      responses:
+        '200':
+          description: Renamed document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [documents]
+      summary: Delete a document and all its flashcards
+      parameters:
+        - $ref: '#/components/parameters/DocId'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Flashcards ────────────────────────────
+
+  /api/flashcards/{doc_id}:
+    get:
+      tags: [flashcards]
+      summary: Get all flashcards for a document
+      description: Returns cards with shuffled multiple-choice options. Also increments the user's flashcards-reviewed stat.
+      parameters:
+        - $ref: '#/components/parameters/DocId'
+      responses:
+        '200':
+          description: List of flashcards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FlashcardOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/flashcards/{doc_id}/regenerate:
+    post:
+      tags: [flashcards]
+      summary: Delete all cards and regenerate 15 new ones via Gemini
+      parameters:
+        - $ref: '#/components/parameters/DocId'
+      responses:
+        '200':
+          description: New flashcards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FlashcardOut'
+        '400':
+          description: Document still processing or no stored text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/flashcards/{doc_id}/new:
+    post:
+      tags: [flashcards]
+      summary: Manually create a new flashcard
+      parameters:
+        - $ref: '#/components/parameters/DocId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlashcardCreate'
+            example:
+              question: What is ATP?
+              answer: Adenosine triphosphate — the energy currency of the cell
+              topic: Biology
+      responses:
+        '200':
+          description: Created flashcard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlashcardOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/flashcards/{card_id}:
+    patch:
+      tags: [flashcards]
+      summary: Edit a flashcard's question, answer, or topic
+      parameters:
+        - $ref: '#/components/parameters/CardId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlashcardPatch'
+            example:
+              question: What does ATP stand for?
+              answer: Adenosine triphosphate
+      responses:
+        '200':
+          description: Updated flashcard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlashcardOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [flashcards]
+      summary: Delete a flashcard
+      parameters:
+        - $ref: '#/components/parameters/CardId'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Quiz ──────────────────────────────────
+
+  /api/quiz/start:
+    post:
+      tags: [quiz]
+      summary: Start a new quiz session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuizStartRequest'
+            example:
+              doc_id: 1
+              num_questions: 10
+      responses:
+        '200':
+          description: Quiz session created; first question returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizStartResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/quiz/{quiz_id}/answer:
+    post:
+      tags: [quiz]
+      summary: Submit an answer to the current question
+      description: >
+        Records the answer, marks correct/incorrect, and returns either the next
+        question or a `completed: true` payload when all questions are answered.
+      parameters:
+        - $ref: '#/components/parameters/QuizId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuizAnswerRequest'
+            example:
+              answer: Adenosine triphosphate
+              time_taken_seconds: 12.4
+      responses:
+        '200':
+          description: Next question or completion signal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizAdvanceResponse'
+        '400':
+          description: Quiz already completed, or all questions already answered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/quiz/{quiz_id}/skip:
+    post:
+      tags: [quiz]
+      summary: Skip the current question
+      parameters:
+        - $ref: '#/components/parameters/QuizId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuizSkipRequest'
+            example:
+              time_taken_seconds: 30.0
+      responses:
+        '200':
+          description: Next question or completion signal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizAdvanceResponse'
+        '400':
+          description: Quiz already completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/quiz/history:
+    get:
+      tags: [quiz]
+      summary: Get the last 20 completed quizzes
+      responses:
+        '200':
+          description: Quiz history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/QuizHistoryItem'
+
+  /api/quiz/{quiz_id}/results:
+    get:
+      tags: [quiz]
+      summary: Get score and wrong answers for a completed quiz
+      parameters:
+        - $ref: '#/components/parameters/QuizId'
+      responses:
+        '200':
+          description: Quiz results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizResults'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/quiz/{quiz_id}/review:
+    get:
+      tags: [quiz]
+      summary: Get a full per-question review with correct/user answers
+      parameters:
+        - $ref: '#/components/parameters/QuizId'
+      responses:
+        '200':
+          description: Detailed review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizReviewResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Stats ─────────────────────────────────
+
+  /api/stats/me:
+    get:
+      tags: [stats]
+      summary: Get study stats for the current user
+      responses:
+        '200':
+          description: Streak, quiz count, average score, cards reviewed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+
+# ─────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    DocId:
+      name: doc_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Document ID
+
+    CardId:
+      name: card_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Flashcard ID
+
+    QuizId:
+      name: quiz_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Quiz session ID
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            detail: Invalid token
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            detail: Document not found
+    Conflict:
+      description: Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            detail: Email already registered
+
+  schemas:
+
+    ErrorDetail:
+      type: object
+      properties:
+        detail:
+          type: string
+      required: [detail]
+
+    # ── Auth ──
+
+    RegisterRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: Short-lived JWT (15 min)
+        token_type:
+          type: string
+          example: bearer
+
+    UserOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+
+    # ── Documents ──
+
+    DocumentOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+        page_count:
+          type: integer
+        status:
+          type: string
+          enum: [processing, ready, failed]
+        created_at:
+          type: string
+          format: date-time
+
+    UploadResponse:
+      type: object
+      properties:
+        doc_id:
+          type: integer
+
+    DocumentPatch:
+      type: object
+      required: [filename]
+      properties:
+        filename:
+          type: string
+
+    # ── Flashcards ──
+
+    FlashcardOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        question:
+          type: string
+        answer:
+          type: string
+        topic:
+          type: string
+          nullable: true
+        options:
+          type: array
+          items:
+            type: string
+          description: Correct answer + up to 3 distractors, shuffled
+
+    FlashcardCreate:
+      type: object
+      required: [question, answer]
+      properties:
+        question:
+          type: string
+        answer:
+          type: string
+        topic:
+          type: string
+          nullable: true
+
+    FlashcardPatch:
+      type: object
+      properties:
+        question:
+          type: string
+          nullable: true
+        answer:
+          type: string
+          nullable: true
+        topic:
+          type: string
+          nullable: true
+
+    # ── Quiz ──
+
+    QuizStartRequest:
+      type: object
+      required: [doc_id, num_questions]
+      properties:
+        doc_id:
+          type: integer
+        num_questions:
+          type: integer
+          minimum: 1
+          maximum: 15
+
+    QuizQuestion:
+      type: object
+      properties:
+        question_id:
+          type: integer
+        text:
+          type: string
+        options:
+          type: array
+          items:
+            type: string
+        question_number:
+          type: integer
+        total_questions:
+          type: integer
+        time_limit_seconds:
+          type: integer
+          default: 30
+
+    QuizStartResponse:
+      type: object
+      properties:
+        quiz_id:
+          type: integer
+        question:
+          $ref: '#/components/schemas/QuizQuestion'
+
+    QuizAnswerRequest:
+      type: object
+      required: [answer, time_taken_seconds]
+      properties:
+        answer:
+          type: string
+        time_taken_seconds:
+          type: number
+
+    QuizSkipRequest:
+      type: object
+      required: [time_taken_seconds]
+      properties:
+        time_taken_seconds:
+          type: number
+
+    QuizAdvanceResponse:
+      type: object
+      description: Returned by /answer and /skip
+      properties:
+        completed:
+          type: boolean
+        quiz_id:
+          type: integer
+        question:
+          $ref: '#/components/schemas/QuizQuestion'
+          description: Present only when completed is false
+      required: [completed, quiz_id]
+
+    QuizResults:
+      type: object
+      properties:
+        score:
+          type: integer
+        total:
+          type: integer
+        percentage:
+          type: number
+        time_taken_seconds:
+          type: number
+        wrong_answers:
+          type: array
+          items:
+            type: object
+            properties:
+              question:
+                type: string
+              your_answer:
+                type: string
+                nullable: true
+              correct_answer:
+                type: string
+
+    QuizHistoryItem:
+      type: object
+      properties:
+        quiz_id:
+          type: integer
+        doc_filename:
+          type: string
+        score:
+          type: integer
+        total:
+          type: integer
+        percentage:
+          type: number
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    QuizReviewResponse:
+      type: object
+      properties:
+        questions:
+          type: array
+          items:
+            type: object
+            properties:
+              question:
+                type: string
+              options:
+                type: array
+                items:
+                  type: string
+              correct_answer:
+                type: string
+              user_answer:
+                type: string
+                nullable: true
+              is_correct:
+                type: boolean
+                nullable: true
+              time_taken_seconds:
+                type: number
+                nullable: true
+
+    # ── Stats ──
+
+    StatsResponse:
+      type: object
+      properties:
+        streak:
+          type: integer
+          description: Current daily study streak in days
+        total_quizzes:
+          type: integer
+        average_score:
+          type: integer
+          description: Average quiz score as a percentage (0–100)
+        total_flashcards_reviewed:
+          type: integer

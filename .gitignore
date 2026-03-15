@@ -23,3 +23,4 @@ frontend/.env.production.local
 frontend/dist
 frontend/build
 backend/.python-version
+.pytest_cache
