@@ -1,23 +1,19 @@
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 
-
 # Auth
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     name: str
 
-
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
-
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-
 
 class UserOut(BaseModel):
     id: int
@@ -26,6 +22,8 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
 
 
 # Documents
@@ -39,10 +37,8 @@ class DocumentOut(BaseModel):
     class Config:
         from_attributes = True
 
-
 class UploadResponse(BaseModel):
     doc_id: int
-
 
 class DocumentPatch(BaseModel):
     filename: str
@@ -59,7 +55,6 @@ class FlashcardOut(BaseModel):
     class Config:
         from_attributes = True
 
-
 class FlashcardPatch(BaseModel):
     question: Optional[str] = None
     answer: Optional[str] = None
@@ -72,6 +67,7 @@ class FlashcardCreate(BaseModel):
     topic: Optional[str] = None
 
 
+
 # Stats
 class StatsResponse(BaseModel):
     streak: int
@@ -80,11 +76,11 @@ class StatsResponse(BaseModel):
     total_flashcards_reviewed: int
 
 
+
 # Quiz
 class QuizStartRequest(BaseModel):
     doc_id: int
     num_questions: int
-
 
 class QuizQuestion(BaseModel):
     question_id: int
@@ -93,7 +89,6 @@ class QuizQuestion(BaseModel):
     question_number: int
     total_questions: int
     time_limit_seconds: int = 30
-
 
 class QuizStartResponse(BaseModel):
     quiz_id: int
