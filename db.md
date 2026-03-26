@@ -12,7 +12,7 @@
 
 ## refresh_tokens
 
-| Column      | Type     | Constraints               |
+, Column      | Type     | Constraints               |
 |-------------|----------|---------------------------|
 | id          | INTEGER  | PK, auto-increment        |
 | user_id     | INTEGER  | FK → users.id, NOT NULL   |

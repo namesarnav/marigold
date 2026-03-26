@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from hashlib import sha256
-
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Cookie, status
 from jose import jwt
@@ -15,19 +14,15 @@ from ..schemas import LoginRequest, RegisterRequest, TokenResponse, UserOut
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
 
-
 def _hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
 
 def _verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
-
 def _create_access_token(user_id: int) -> str:
     expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
     return jwt.encode({"sub": str(user_id), "exp": expire}, settings.secret_key, algorithm=ALGORITHM)
-
 
 def _create_refresh_token(user_id: int, db: Session) -> str:
     import secrets
@@ -38,7 +33,6 @@ def _create_refresh_token(user_id: int, db: Session) -> str:
     db.add(db_token)
     db.commit()
     return raw
-
 
 @router.post("/register", response_model=TokenResponse)
 def register(payload: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)):
@@ -67,7 +61,6 @@ def register(payload: RegisterRequest, request: Request, response: Response, db:
     )
     return TokenResponse(access_token=access_token)
 
-
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
@@ -87,7 +80,6 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
         samesite="lax",
     )
     return TokenResponse(access_token=access_token)
-
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh(response: Response, refresh_token: str = Cookie(default=None), db: Session = Depends(get_db)):
@@ -117,7 +109,6 @@ def refresh(response: Response, refresh_token: str = Cookie(default=None), db: S
         samesite="lax",
     )
     return TokenResponse(access_token=access_token)
-
 
 @router.post("/logout")
 def logout(request: Request, response: Response, refresh_token: str = Cookie(default=None), db: Session = Depends(get_db)):

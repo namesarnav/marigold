@@ -24,8 +24,6 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
-
-
 # Documents
 class DocumentOut(BaseModel):
     id: int
@@ -67,15 +65,12 @@ class FlashcardCreate(BaseModel):
     topic: Optional[str] = None
 
 
-
 # Stats
 class StatsResponse(BaseModel):
     streak: int
     total_quizzes: int
     average_score: int
     total_flashcards_reviewed: int
-
-
 
 # Quiz
 class QuizStartRequest(BaseModel):

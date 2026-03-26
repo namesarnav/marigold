@@ -11,7 +11,6 @@ settings = get_settings()
 async def generate_flashcards(extracted_text: str, n: int = 15) -> List[Dict[str, Any]]:
     prompt = f"""
 You are a study assistant. Extract flashcards from the following text.
-
 Return ONLY a JSON array, no markdown, no explanation. Format:
 [
   {{
