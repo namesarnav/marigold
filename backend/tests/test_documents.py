@@ -2,7 +2,7 @@
 import io
 from unittest.mock import AsyncMock, patch
 
-from conftest import MOCK_CARDS, upload_doc
+from conftest import MOCK_CARDS, register_and_verify, upload_doc
 
 
 def test_upload_success(client, auth_headers, minimal_pdf):
@@ -120,20 +120,12 @@ def test_delete_not_found(client, auth_headers):
 
 
 def test_other_user_cannot_access_document(client, minimal_pdf):
-    # Register user 1, upload while session is user 1
-    r1 = client.post(
-        "/api/auth/register",
-        json={"email": "u1@x.com", "password": "pass", "name": "U1"},
-    )
-    h1 = {"Authorization": f"Bearer {r1.json()['access_token']}"}
+    # Both users are verified: an unverified account would be rejected by the
+    # email-verification gate, which would pass this test for the wrong reason.
+    h1 = register_and_verify(client, "u1@x.com", "U1")
     doc_id = upload_doc(client, h1, minimal_pdf)
 
-    # Register user 2 — session cookie now points to user 2
-    r2 = client.post(
-        "/api/auth/register",
-        json={"email": "u2@x.com", "password": "pass", "name": "U2"},
-    )
-    h2 = {"Authorization": f"Bearer {r2.json()['access_token']}"}
+    h2 = register_and_verify(client, "u2@x.com", "U2")
 
-    # User 2 (via session) cannot see user 1's document
+    # User 2 cannot see user 1's document
     assert client.get(f"/api/documents/{doc_id}", headers=h2).status_code == 404

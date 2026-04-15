@@ -5,11 +5,11 @@ from unittest.mock import MagicMock
 import bcrypt
 import pytest
 
-from backend.routes.auth import (
-    _create_access_token,
-    _hash_password,
-    _verify_password,
-)
+from backend.routes.auth import _create_access_token
+
+# Password hashing moved to backend.security as part of the auth upgrade.
+from backend.security import hash_password as _hash_password
+from backend.security import verify_password as _verify_password
 from backend.routes.stats import calculate_streak
 
 
