@@ -5,8 +5,9 @@ import fitz  # PyMuPDF
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from ..concepts import assign_concepts
 from ..database import get_db
-from ..dependencies import get_current_user
+from ..dependencies import get_verified_user
 from ..gemini import generate_flashcards
 from ..models import Document, Flashcard, User
 from ..schemas import DocumentOut, DocumentPatch, UploadResponse
@@ -35,7 +36,7 @@ def _doc_out(d: Document) -> DocumentOut:
 async def upload_pdf(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
@@ -64,6 +65,7 @@ async def upload_pdf(
         db.commit()
         raise HTTPException(status_code=500, detail=f"Failed to generate flashcards: {e}")
 
+    new_cards = []
     for item in flashcard_data:
         distractors = item.get("distractors") or []
         card = Flashcard(
@@ -74,6 +76,10 @@ async def upload_pdf(
             distractors=json.dumps(distractors[:3]),
         )
         db.add(card)
+        new_cards.append(card)
+
+    db.flush()
+    assign_concepts(db, new_cards, current_user.id)
 
     document.status = "ready"
     db.commit()
@@ -84,7 +90,7 @@ async def upload_pdf(
 @router.get("", response_model=List[DocumentOut])
 def list_documents(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     docs = (
         db.query(Document)
@@ -99,7 +105,7 @@ def list_documents(
 def get_document(
     doc_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == current_user.id).first()
     if not doc:
@@ -112,7 +118,7 @@ def rename_document(
     doc_id: int,
     payload: DocumentPatch,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == current_user.id).first()
     if not doc:
@@ -127,7 +133,7 @@ def rename_document(
 def delete_document(
     doc_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == current_user.id).first()
     if not doc:

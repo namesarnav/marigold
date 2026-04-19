@@ -6,11 +6,18 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from ..concepts import assign_concepts, log_interaction, resolve_concept_for_card
 from ..database import get_db
-from ..dependencies import get_current_user
+from ..dependencies import get_verified_user
 from ..gemini import generate_flashcards
 from ..models import Document, Flashcard, User, UserStats
-from ..schemas import FlashcardCreate, FlashcardOut, FlashcardPatch
+from ..schemas import (
+    FlashcardCreate,
+    FlashcardOut,
+    FlashcardPatch,
+    StudyReviewRequest,
+    StudyReviewResponse,
+)
 
 router = APIRouter(prefix="/api/flashcards", tags=["flashcards"])
 
@@ -52,7 +59,7 @@ def _get_doc_for_user(doc_id: int, user_id: int, db: Session) -> Document:
 def get_flashcards(
     doc_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     _get_doc_for_user(doc_id, current_user.id, db)
     cards = (
@@ -71,7 +78,7 @@ def get_flashcards(
 async def regenerate_flashcards(
     doc_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     doc = _get_doc_for_user(doc_id, current_user.id, db)
     if doc.status == "processing":
@@ -103,6 +110,9 @@ async def regenerate_flashcards(
         db.add(card)
         new_cards.append(card)
 
+    db.flush()
+    assign_concepts(db, new_cards, current_user.id)
+
     doc.status = "ready"
     db.commit()
     for c in new_cards:
@@ -115,7 +125,7 @@ def create_flashcard(
     doc_id: int,
     payload: FlashcardCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     _get_doc_for_user(doc_id, current_user.id, db)
     card = Flashcard(
@@ -126,6 +136,8 @@ def create_flashcard(
         distractors=json.dumps([]),
     )
     db.add(card)
+    db.flush()
+    resolve_concept_for_card(db, card, current_user.id)
     db.commit()
     db.refresh(card)
     return _card_to_out(card)
@@ -136,7 +148,7 @@ def patch_flashcard(
     card_id: int,
     payload: FlashcardPatch,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     card = db.query(Flashcard).filter(Flashcard.id == card_id).first()
     if not card:
@@ -147,8 +159,13 @@ def patch_flashcard(
         card.question = payload.question
     if payload.answer is not None:
         card.answer = payload.answer
-    if payload.topic is not None:
+    if payload.topic is not None and payload.topic != card.topic:
         card.topic = payload.topic
+        # The topic *is* the concept key until embeddings land, so an edited
+        # topic must re-resolve. Past interactions keep pointing at the old
+        # concept, which is correct: they happened under the old grouping.
+        card.concept_id = None
+        resolve_concept_for_card(db, card, current_user.id)
     db.commit()
     db.refresh(card)
     return _card_to_out(card)
@@ -158,7 +175,7 @@ def patch_flashcard(
 def delete_flashcard(
     card_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     card = db.query(Flashcard).filter(Flashcard.id == card_id).first()
     if not card:
@@ -166,3 +183,39 @@ def delete_flashcard(
     _get_doc_for_user(card.doc_id, current_user.id, db)
     db.delete(card)
     db.commit()
+
+
+@router.post("/{card_id}/review", response_model=StudyReviewResponse)
+def review_flashcard(
+    card_id: int,
+    payload: StudyReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_verified_user),
+):
+    """Record a study-mode self-grade.
+
+    Study mode previously tracked "known" purely in React state, so every
+    self-graded review was thrown away on unmount. Those are the cheapest
+    retention signals the app produces, so they now land in the interaction log
+    alongside quiz answers — distinguished by `source="study"`, since a
+    self-grade is weaker evidence than a scored multiple-choice answer and the
+    model should be free to weight it differently.
+    """
+    card = db.query(Flashcard).filter(Flashcard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Flashcard not found")
+    _get_doc_for_user(card.doc_id, current_user.id, db)
+
+    interaction = log_interaction(
+        db,
+        user_id=current_user.id,
+        card=card,
+        source="study",
+        correct=payload.known,
+        response_time_ms=payload.response_time_ms,
+    )
+    db.commit()
+    return StudyReviewResponse(
+        interaction_id=interaction.id,
+        concept_id=interaction.concept_id,
+    )
