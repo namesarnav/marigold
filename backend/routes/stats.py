@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..dependencies import get_current_user
+from ..dependencies import get_verified_user
 from ..models import QuizSession, User, UserStats
 from ..schemas import StatsResponse
 
@@ -31,7 +31,7 @@ def calculate_streak(user_id: int, db: Session) -> int:
 
 @router.get("/me", response_model=StatsResponse)
 def get_my_stats(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: Session = Depends(get_db),
 ):
     all_stats = db.query(UserStats).filter(UserStats.user_id == current_user.id).all()

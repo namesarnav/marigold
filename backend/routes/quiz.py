@@ -6,8 +6,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..concepts import log_interaction, seconds_to_ms
 from ..database import get_db
-from ..dependencies import get_current_user
+from ..dependencies import get_verified_user
 from ..models import Document, Flashcard, QuizAnswer, QuizSession, User, UserStats
 from ..schemas import (
     QuizAnswerRequest,
@@ -64,7 +65,7 @@ def _select_cards(doc_id: int, num_questions: int, db: Session) -> List[Flashcar
 def start_quiz(
     payload: QuizStartRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     doc = db.query(Document).filter(
         Document.id == payload.doc_id, Document.user_id == current_user.id
@@ -127,7 +128,7 @@ def submit_answer(
     quiz_id: int,
     payload: QuizAnswerRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     session = _get_session(quiz_id, current_user.id, db)
     answered_ids = {a.flashcard_id for a in session.answers}
@@ -151,6 +152,15 @@ def submit_answer(
         is_correct=is_correct,
         time_taken_seconds=payload.time_taken_seconds,
     ))
+    log_interaction(
+        db,
+        user_id=current_user.id,
+        card=card,
+        source="quiz",
+        correct=bool(is_correct),
+        response_time_ms=seconds_to_ms(payload.time_taken_seconds),
+        quiz_session_id=session.id,
+    )
     db.commit()
     return _next_or_complete(session, db)
 
@@ -160,7 +170,7 @@ def skip_question(
     quiz_id: int,
     payload: QuizSkipRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     session = _get_session(quiz_id, current_user.id, db)
     answered_ids = {a.flashcard_id for a in session.answers}
@@ -183,6 +193,15 @@ def skip_question(
         is_correct=None,
         time_taken_seconds=payload.time_taken_seconds,
     ))
+    log_interaction(
+        db,
+        user_id=current_user.id,
+        card=card,
+        source="quiz",
+        correct=None,
+        response_time_ms=seconds_to_ms(payload.time_taken_seconds),
+        quiz_session_id=session.id,
+    )
     db.commit()
     return _next_or_complete(session, db)
 
@@ -190,7 +209,7 @@ def skip_question(
 @router.get("/history", response_model=List[QuizHistoryItem])
 def quiz_history(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     sessions = (
         db.query(QuizSession)
@@ -218,7 +237,7 @@ def quiz_history(
 def get_results(
     quiz_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     session = db.query(QuizSession).filter(
         QuizSession.id == quiz_id, QuizSession.user_id == current_user.id
@@ -258,7 +277,7 @@ def get_results(
 def get_review(
     quiz_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
 ):
     session = db.query(QuizSession).filter(
         QuizSession.id == quiz_id, QuizSession.user_id == current_user.id
