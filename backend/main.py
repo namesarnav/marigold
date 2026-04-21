@@ -7,7 +7,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_settings
 from .database import Base, engine
-from .routes import auth, documents, flashcards, quiz, stats
+from .routes import auth, documents, flashcards, interactions, oauth_routes, quiz, stats
 
 settings = get_settings()
 
@@ -17,7 +17,7 @@ app = FastAPI(title="Marigold API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.cors_origins],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,10 +32,12 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(oauth_routes.router)
 app.include_router(documents.router)
 app.include_router(flashcards.router)
 app.include_router(quiz.router)
 app.include_router(stats.router)
+app.include_router(interactions.router)
 
 # Serve the built frontend (production)
 _dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
