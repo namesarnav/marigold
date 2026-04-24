@@ -141,6 +141,13 @@ export async function deleteFlashcard(cardId) {
   return request("DELETE", `/api/flashcards/${cardId}`);
 }
 
+export async function reviewFlashcard(cardId, known, responseTimeMs) {
+  return request("POST", `/api/flashcards/${cardId}/review`, {
+    known,
+    response_time_ms: responseTimeMs,
+  });
+}
+
 export async function regenerateFlashcards(docId) {
   return request("POST", `/api/flashcards/${docId}/regenerate`);
 }

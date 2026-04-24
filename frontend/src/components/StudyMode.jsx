@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { regenerateFlashcards } from "../api.js";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { regenerateFlashcards, reviewFlashcard } from "../api.js";
 import { useToast } from "../toast.jsx";
 
 export default function StudyMode({ cards: initialCards, docId, onStartQuiz, onBack, onReloadCards }) {
@@ -10,6 +10,9 @@ export default function StudyMode({ cards: initialCards, docId, onStartQuiz, onB
   const [showRegenModal, setShowRegenModal] = useState(false);
   const [regenLoading, setRegenLoading] = useState(false);
   const toast = useToast();
+  // When the current card was first shown, so a self-grade carries a response
+  // time. Feeds response_time_ms on the interaction the backend records.
+  const shownAt = useRef(Date.now());
 
   // Sync if parent reloads cards
   useEffect(() => { setCards(initialCards); setIndex(0); setFlipped(false); setKnown(new Set()); }, [initialCards]);
@@ -18,6 +21,18 @@ export default function StudyMode({ cards: initialCards, docId, onStartQuiz, onB
   const card = cards[index];
   const knownCount = known.size;
   const allKnown = knownCount === total && total > 0;
+
+  useEffect(() => { shownAt.current = Date.now(); }, [index, cards]);
+
+  // Persist the self-grade. Deliberately not awaited: recording history must
+  // never make the card advance feel slow, and a lost review is not worth
+  // interrupting a study session over.
+  const recordReview = (cardId, isKnown) => {
+    const elapsed = Date.now() - shownAt.current;
+    reviewFlashcard(cardId, isKnown, elapsed).catch((err) => {
+      console.warn("Failed to record review", err);
+    });
+  };
 
   const goNext = useCallback(() => { setFlipped(false); setIndex((i) => Math.min(i + 1, total - 1)); }, [total]);
   const goPrev = useCallback(() => { setFlipped(false); setIndex((i) => Math.max(i - 1, 0)); }, []);
@@ -33,11 +48,13 @@ export default function StudyMode({ cards: initialCards, docId, onStartQuiz, onB
   }, [goNext, goPrev]);
 
   const handleGotIt = () => {
+    recordReview(card.id, true);
     setKnown((s) => new Set([...s, card.id]));
     if (index < total - 1) { setFlipped(false); setIndex((i) => i + 1); }
   };
 
   const handleStillLearning = () => {
+    recordReview(card.id, false);
     setKnown((s) => { const n = new Set(s); n.delete(card.id); return n; });
     if (index < total - 1) { setFlipped(false); setIndex((i) => i + 1); }
   };
