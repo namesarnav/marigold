@@ -1,0 +1,17 @@
+# Terraform state contains resource ids and can contain secrets in plaintext.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Real variable values (your IP, your SSH key). Commit the .example instead.
+*.tfvars
+!*.tfvars.example
+
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
