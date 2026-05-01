@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Bootstraps the single-node k3s cluster. Runs once, on first boot.
+#
+# This is deliberately thin: it installs k3s and the tooling needed to pull
+# images, and stops there. Application manifests are applied by CI
+# (`kubectl apply`), not baked in here, so a deploy does not require touching
+# the instance.
+set -euo pipefail
+
+exec > >(tee -a /var/log/marigold-bootstrap.log) 2>&1
+echo "=== marigold bootstrap starting $(date -Is) ==="
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y curl unzip ca-certificates
+
+# --- AWS CLI (arm64) ----------------------------------------------------------
+# Needed for `aws ecr get-login-password`. Installed from the official bundle
+# because the distro package lags well behind.
+if ! command -v aws >/dev/null 2>&1; then
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install
+  rm -rf /tmp/awscliv2.zip /tmp/aws
+fi
+aws configure set default.region "${aws_region}"
+
+# --- k3s ----------------------------------------------------------------------
+# Flags chosen for a single node on a small instance:
+#   --disable traefik   is NOT passed: Traefik is the ingress, and an ALB
+#                       ($16/mo) is out of budget.
+#   --disable servicelb is NOT passed: klipper-lb binds host ports, which is
+#                       how :80/:443 reach the cluster without a cloud LB.
+#   --disable metrics-server  saves ~100MB of RAM, which matters on t4g.small.
+#   --write-kubeconfig-mode  makes the kubeconfig readable for copying out.
+if ! command -v k3s >/dev/null 2>&1; then
+  curl -fsSL https://get.k3s.io | INSTALL_K3S_EXEC="\
+    --disable metrics-server \
+    --write-kubeconfig-mode 644 \
+    --node-label marigold.io/role=all" sh -
+fi
+
+# Wait for the API to answer before anything tries to use it.
+for _ in $(seq 1 60); do
+  if k3s kubectl get nodes >/dev/null 2>&1; then break; fi
+  sleep 5
+done
+
+k3s kubectl create namespace ${project} --dry-run=client -o yaml | k3s kubectl apply -f -
+
+# --- ECR pull credentials -----------------------------------------------------
+# ECR tokens expire every 12 hours, so this refreshes the image-pull secret on a
+# timer rather than once at boot. The instance role supplies the credentials;
+# nothing is stored on disk.
+cat >/usr/local/bin/marigold-ecr-refresh <<'EOS'
+#!/usr/bin/env bash
+set -euo pipefail
+REGISTRY="__ECR_REGISTRY__"
+NAMESPACE="__NAMESPACE__"
+REGION="__REGION__"
+TOKEN="$(aws ecr get-login-password --region "$REGION")"
+k3s kubectl -n "$NAMESPACE" create secret docker-registry ecr-creds \
+  --docker-server="$REGISTRY" \
+  --docker-username=AWS \
+  --docker-password="$TOKEN" \
+  --dry-run=client -o yaml | k3s kubectl apply -f -
+EOS
+
+sed -i \
+  -e "s|__ECR_REGISTRY__|${ecr_registry}|" \
+  -e "s|__NAMESPACE__|${project}|" \
+  -e "s|__REGION__|${aws_region}|" \
+  /usr/local/bin/marigold-ecr-refresh
+chmod +x /usr/local/bin/marigold-ecr-refresh
+
+cat >/etc/systemd/system/marigold-ecr-refresh.service <<'EOS'
+[Unit]
+Description=Refresh the ECR image-pull secret in the cluster
+After=k3s.service
+Requires=k3s.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/marigold-ecr-refresh
+EOS
+
+cat >/etc/systemd/system/marigold-ecr-refresh.timer <<'EOS'
+[Unit]
+Description=Refresh the ECR image-pull secret every 6 hours
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOS
+
+systemctl daemon-reload
+systemctl enable --now marigold-ecr-refresh.timer
+
+# --- Environment for the app --------------------------------------------------
+# Non-secret configuration the deployed manifests read. Secrets (GEMINI_API_KEY,
+# SECRET_KEY, database password) are created as Kubernetes secrets by CI and are
+# deliberately not written here.
+cat >/etc/marigold.env <<EOF
+AWS_REGION=${aws_region}
+ARTIFACTS_BUCKET=${artifacts_s3}
+ECR_REGISTRY=${ecr_registry}
+EOF
+
+echo "=== marigold bootstrap complete $(date -Is) ==="
