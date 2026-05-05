@@ -1,0 +1,40 @@
+# ML service: knowledge tracing + concept clustering.
+#
+# Versions below are the ones this pipeline was actually validated against
+# (ASSISTments 2009 held-out AUC 0.7535, full test suite green) rather than
+# aspirational pins.
+#
+# Torch: on the Linux/ARM deployment target the CPU wheel index avoids pulling
+# the ~2GB CUDA runtime, which would not fit the node's 30GB root volume and is
+# useless on Graviton. The extra index is additive, so macOS/arm64 development
+# machines still resolve the normal PyPI wheel from the same file.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.14.0
+numpy==2.5.2
+pandas==3.0.5
+scikit-learn==1.9.0
+scipy==1.18.1
+
+# Concept clustering. Pinned because the embedding dimension (384 for
+# all-MiniLM-L6-v2) is baked into stored concept centroids — changing the model
+# means re-clustering and a migration, not just a version bump.
+sentence-transformers==6.0.1
+transformers==5.16.1
+
+# Service surface. Not yet used — no FastAPI app is exposed from ml/ (see
+# README "Not built yet") — but pinned here so the serving image is a
+# dependency change away rather than a resolution exercise.
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+
+# Model artifacts are pulled from S3 at startup.
+boto3==1.35.24
+
+# Schema prototyping (ml/schema.py). SQLite during development, Postgres in
+# deployment; pgvector is an additional dependency when the embedding column
+# moves to a real vector type.
+SQLAlchemy==2.0.36
+
+pytest==9.1.1

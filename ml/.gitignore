@@ -1,0 +1,18 @@
+# Model artifacts live in S3 (models/ prefix), never in git.
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+artifacts/
+checkpoints/
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Downloaded benchmark data — fetched by ml/data/assistments.py, not committed.
+data/raw/
+.pytest_cache/
