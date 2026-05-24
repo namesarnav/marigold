@@ -30,3 +30,18 @@ def get_db():
     finally:
         db.close()
 
+
+def get_session_factory():
+    """The session factory itself, exposed as a FastAPI dependency.
+
+    Background work cannot reuse the request-scoped session from `get_db`: that
+    session is closed as soon as the response is sent, and the task runs after
+    that. It has to open its own.
+
+    Handing the *factory* out through the dependency system, rather than letting
+    background code import `SessionLocal` directly, is what keeps it testable —
+    the suite overrides this to point background work at its in-memory engine,
+    the same way it already overrides `get_db`.
+    """
+    return SessionLocal
+
