@@ -31,15 +31,36 @@ from backend.config import get_settings
 
 get_settings.cache_clear()
 
-from backend.database import Base, get_db
+from backend.database import Base, get_db, get_session_factory
 from backend.main import app
 
-# Isolated in-memory SQLite engine shared across all connections in a test
-_test_engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
+# The database the suite runs against.
+#
+# Defaults to in-memory SQLite, which is fast and needs nothing installed. Set
+# TEST_DATABASE_URL to a Postgres URL to run the identical suite against the
+# engine actually used in deployment:
+#
+#   docker run -d -p 55432:5432 -e POSTGRES_PASSWORD=devpass \
+#     -e POSTGRES_USER=marigold -e POSTGRES_DB=marigold postgres:16
+#   TEST_DATABASE_URL=postgresql+psycopg://marigold:devpass@localhost:55432/marigold \
+#     pytest backend/
+#
+# This matters because SQLite is permissive in ways Postgres is not — it does
+# not enforce foreign keys by default, is lax about types, and allows DDL inside
+# a transaction. A suite that only ever sees SQLite cannot tell you the app
+# works on the database it will actually be deployed on.
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "sqlite:///:memory:")
+
+if TEST_DATABASE_URL.startswith("sqlite"):
+    # One shared in-memory database across every connection in a test; a normal
+    # pool would hand out connections to separate, empty databases.
+    _test_engine = create_engine(
+        TEST_DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+else:
+    _test_engine = create_engine(TEST_DATABASE_URL)
 _TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
 
 MOCK_CARDS = [
@@ -82,6 +103,10 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = _override_get_db
+    # Background work (PDF card generation) opens its own session rather than
+    # reusing the request-scoped one, so it needs pointing at the test engine
+    # too — otherwise it would quietly write to the real SQLite file.
+    app.dependency_overrides[get_session_factory] = lambda: _TestSession
     with TestClient(app, raise_server_exceptions=True) as c:
         yield c
     app.dependency_overrides.clear()
@@ -155,15 +180,15 @@ def verify_user(client, email):
 def register_and_verify(client, email, name="User", password=STRONG_PASSWORD):
     """Register a user, verify their email, return Bearer headers for them.
 
-    Cookies are cleared afterwards on purpose: `get_current_user` resolves the
-    session cookie before the Authorization header, so leaving the registration
-    cookie in place would make every later request resolve as the most recently
-    registered user regardless of the token sent.
+    No cookie clearing needed: `get_current_user` resolves the Authorization
+    header before the session cookie, so the returned headers identify this user
+    even though the shared TestClient still holds an earlier registration's
+    cookie. That ordering is asserted directly in
+    `test_auth.py::test_bearer_token_wins_over_a_stale_session_cookie`.
     """
     resp = register_user(client, email=email, password=password, name=name)
     assert resp.status_code == 200, resp.text
     token = verify_user(client, email)
-    client.cookies.clear()
     return {"Authorization": f"Bearer {token}"}
 
 
