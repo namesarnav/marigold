@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
 
+    # --- Cookie security ---------------------------------------------------
+    # Sets the Secure flag on the session cookie. False locally (plain HTTP);
+    # must be true anywhere the app is reachable over the internet, or the
+    # session cookie travels in cleartext. Set from the deployed ConfigMap.
+    cookie_secure: bool = False
+
     # --- Public URLs -------------------------------------------------------
     # Where the emailed links point, and where OAuth callbacks bounce the
     # browser back to once the flow finishes.
