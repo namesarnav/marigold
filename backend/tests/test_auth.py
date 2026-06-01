@@ -371,3 +371,39 @@ def test_verification_token_cannot_be_used_as_reset_token(client):
         json={"token": verify_token, "password": "Cr0ss-Purpose!x"},
     )
     assert resp.status_code == 400
+
+
+def test_bearer_token_wins_over_a_stale_session_cookie(client):
+    """An explicit Authorization header must beat an ambient session cookie.
+
+    Regression test. `get_current_user` used to resolve the session cookie
+    first, so a client holding a cookie for one account was resolved as that
+    account even when it presented a valid bearer token for another. On a shared
+    browser or after an OAuth login that is one user reading another user's
+    data, so the ordering is pinned here rather than left implicit.
+    """
+    # Register A, then B. The TestClient keeps B's session cookie, because it is
+    # the most recent registration and cookies persist across requests.
+    register_user(client, email="alice@example.com", name="Alice")
+    alice_token = verify_user(client, "alice@example.com")
+
+    register_user(client, email="bob@example.com", name="Bob")
+    verify_user(client, "bob@example.com")
+
+    assert client.cookies, "precondition: the client should be holding Bob's cookie"
+
+    me = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {alice_token}"}
+    )
+    assert me.status_code == 200, me.text
+    assert me.json()["email"] == "alice@example.com"
+
+
+def test_session_cookie_still_authenticates_when_no_header_is_sent(client):
+    """The cookie fallback must survive the reordering — OAuth logins rely on it."""
+    register_user(client, email="cookie@example.com", name="Cookie")
+    verify_user(client, "cookie@example.com")
+
+    me = client.get("/api/auth/me")  # no Authorization header at all
+    assert me.status_code == 200, me.text
+    assert me.json()["email"] == "cookie@example.com"
