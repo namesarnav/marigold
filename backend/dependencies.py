@@ -30,31 +30,45 @@ def get_current_user(
     Use this only for endpoints an unverified user must still reach — `/me`,
     and the resend-verification flow. Everything else wants `get_verified_user`.
     """
-    # Check session first
+    # The Authorization header is checked FIRST, and the session cookie is only
+    # a fallback. The order matters and used to be the other way around, which
+    # was a real multi-user bug: a browser (or a test client) holding a session
+    # cookie for user A would be resolved as A even when it presented a valid
+    # bearer token for user B. An explicitly supplied credential must always win
+    # over ambient one, otherwise a stale cookie silently overrides the caller's
+    # actual identity.
+    if credentials is not None:
+        token = credentials.credentials
+        try:
+            payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+            uid_str = payload.get("sub")
+            if uid_str is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+                )
+            user_id = int(uid_str)
+        except JWTError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+            )
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+            )
+        return user
+
+    # No bearer token: fall back to the OAuth session cookie.
     user_id_str = request.session.get("user_id")
     if user_id_str:
         user = db.query(User).filter(User.id == int(user_id_str)).first()
         if user:
             return user
 
-    # Fall back to JWT bearer token
-    if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
-        uid_str = payload.get("sub")
-        if uid_str is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-        user_id = int(uid_str)
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return user
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+    )
 
 
 def get_verified_user(current_user: User = Depends(get_current_user)) -> User:
