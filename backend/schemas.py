@@ -94,6 +94,10 @@ class DocumentOut(BaseModel):
 
 class UploadResponse(BaseModel):
     doc_id: int
+    # Always "processing" at this point: the upload returns before generation
+    # runs. Included so the client knows to start polling GET /api/documents/{id}
+    # rather than assuming the cards are ready.
+    status: str = "processing"
 
 class DocumentPatch(BaseModel):
     filename: str
