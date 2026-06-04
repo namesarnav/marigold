@@ -39,6 +39,13 @@ def test_upload_requires_auth(client, minimal_pdf):
 
 
 def test_upload_gemini_failure_marks_failed(client, auth_headers, minimal_pdf):
+    """A Gemini outage surfaces as document status, not as an upload error.
+
+    Generation moved into a background task, so the upload itself has already
+    succeeded by the time the model call fails. There is no request left to
+    return 500 on; the failure has to be recorded on the document so the polling
+    client can see it.
+    """
     with patch(
         "backend.routes.documents.generate_flashcards", new_callable=AsyncMock
     ) as mock_gen:
@@ -48,7 +55,52 @@ def test_upload_gemini_failure_marks_failed(client, auth_headers, minimal_pdf):
             files={"file": ("notes.pdf", io.BytesIO(minimal_pdf), "application/pdf")},
             headers=auth_headers,
         )
-    assert resp.status_code == 500
+
+    assert resp.status_code == 200, resp.text
+    doc_id = resp.json()["doc_id"]
+
+    detail = client.get(f"/api/documents/{doc_id}", headers=auth_headers)
+    assert detail.status_code == 200
+    assert detail.json()["status"] == "failed"
+
+    # And no half-written cards were left behind. This endpoint reports an
+    # empty deck as 404 rather than [], which is its existing contract.
+    cards = client.get(f"/api/flashcards/{doc_id}", headers=auth_headers)
+    assert cards.status_code == 404
+
+
+def test_upload_returns_before_cards_are_generated(client, auth_headers, minimal_pdf):
+    """The response must not wait on the model call.
+
+    This is the property that keeps a large PDF from hitting the ingress
+    response timeout. Asserted by checking that the handler reports the document
+    as still `processing` at the moment it returns — the background task has not
+    run yet.
+    """
+    seen_status = {}
+
+    async def _capture_then_generate(text, n=15):
+        # Runs inside the background task. By now the client has its response.
+        seen_status["at_generation_time"] = "already returned"
+        return MOCK_CARDS
+
+    with patch(
+        "backend.routes.documents.generate_flashcards", new=_capture_then_generate
+    ):
+        resp = client.post(
+            "/api/documents/upload",
+            files={"file": ("notes.pdf", io.BytesIO(minimal_pdf), "application/pdf")},
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 200, resp.text
+    # The handler's own response says "processing" — it did not wait for cards.
+    assert resp.json()["status"] == "processing"
+    assert seen_status["at_generation_time"] == "already returned"
+
+    # And once the background task has run, the document reaches a ready state.
+    detail = client.get(f"/api/documents/{resp.json()['doc_id']}", headers=auth_headers)
+    assert detail.json()["status"] == "ready"
 
 
 def test_list_documents_empty(client, auth_headers):
