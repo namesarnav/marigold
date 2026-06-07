@@ -1,22 +1,34 @@
 import { useState } from "react";
-import { uploadPdf } from "../api.js";
+import { uploadPdf, waitForDocument } from "../api.js";
 
 export default function UploadZone({ onUploaded }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
+  // "uploading" while the file is in flight, "generating" while the server
+  // builds cards. Two phases because the second one is the slow one, and a
+  // spinner that never changes reads as a hang.
+  const [phase, setPhase] = useState("uploading");
 
   const handleFile = async (file) => {
     if (!file) return;
     setError("");
     setLoading(true);
+    setPhase("uploading");
     try {
+      // The upload returns as soon as the document row exists; card generation
+      // runs server-side afterwards. Poll until it reaches a terminal state
+      // rather than holding the request open, which would time out at the
+      // ingress on a large PDF.
       const data = await uploadPdf(file);
+      setPhase("generating");
+      await waitForDocument(data.doc_id);
       onUploaded(data.doc_id, file.name);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+      setPhase("uploading");
     }
   };
 
@@ -39,7 +51,11 @@ export default function UploadZone({ onUploaded }) {
         {loading ? (
           <div className="flex flex-col items-center gap-3">
             <span className="h-6 w-6 border-2 border-fl-black border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm font-sans text-fl-muted">Uploading and generating flashcards…</p>
+            <p className="text-sm font-sans text-fl-muted">
+              {phase === "generating"
+                ? "Reading your PDF and writing flashcards…"
+                : "Uploading…"}
+            </p>
           </div>
         ) : (
           <>

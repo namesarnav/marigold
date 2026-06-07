@@ -102,6 +102,42 @@ export async function uploadPdf(file) {
   return request("POST", "/api/documents/upload", form, true);
 }
 
+/**
+ * Wait for a freshly uploaded document to finish card generation.
+ *
+ * Upload returns as soon as the row exists, with status "processing" — the
+ * Gemini call runs server-side afterwards, so the request cannot be left
+ * hanging on it without tripping the ingress response timeout. The client
+ * polls instead.
+ *
+ * Resolves with the document once its status leaves "processing". Rejects if
+ * generation failed, or if it is still going after `timeoutMs` — a caller that
+ * polls forever is how a stuck job turns into a spinner nobody can dismiss.
+ */
+export async function waitForDocument(
+  docId,
+  { intervalMs = 1500, timeoutMs = 180000, onTick } = {}
+) {
+  const deadline = Date.now() + timeoutMs;
+
+  for (;;) {
+    const doc = await getDocument(docId);
+    if (doc.status === "ready") return doc;
+    if (doc.status === "failed") {
+      throw new Error(
+        "We couldn't generate flashcards from this PDF. Please try again."
+      );
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        "Still working on this PDF. It will appear on your dashboard when it's done."
+      );
+    }
+    if (onTick) onTick(doc);
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
 export async function listDocuments() {
   return request("GET", "/api/documents");
 }
