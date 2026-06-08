@@ -1,8 +1,27 @@
+# Build context hygiene. Everything here is either irrelevant to the runtime
+# image or actively unwanted in it.
+
+# Rebuilt inside the image
 frontend/node_modules
 frontend/dist
-backend/__pycache__
-backend/*.db
+
+# Not part of the app image: the ML pipeline is a separate concern and Terraform
+# state can contain secrets. Sending either to the build daemon is pure waste.
+ml/
+infra/
+.github/
+.git/
+
+# Tests do not ship
+backend/tests/
+.pytest_cache
+pytest.ini
+
+# Local artefacts
 **/__pycache__
 *.pyc
+backend/*.db
+*.db
 .env
-.pytest_cache
+.venv
+venv/
