@@ -1,0 +1,96 @@
+# Postgres, in-cluster.
+#
+# RDS would be the obvious choice and is deliberately not used: the smallest
+# instance is roughly $15/month against a $20 total ceiling. The tradeoff is
+# real and is accepted here — this is a single node with no replica, so the
+# backup CronJob is not optional, it is the entire durability story.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels: { app: postgres }
+spec:
+  # Headless: the StatefulSet gets a stable DNS name and there is exactly one
+  # replica, so there is nothing to load-balance across.
+  clusterIP: None
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector: { app: postgres }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      # The data directory lives on the node's root EBS volume via local-path.
+      # Recreate rather than rolling: two Postgres processes must never hold the
+      # same data directory, and a rolling update would briefly try.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          args:
+            # Tuned for a 2 GB node. The defaults assume a machine with room to
+            # spare; on t4g.small an unbounded Postgres is what the OOM killer
+            # reaches for first.
+            - -c
+            - shared_buffers=128MB
+            - -c
+            - max_connections=30
+            - -c
+            - effective_cache_size=256MB
+            - -c
+            - work_mem=4MB
+            - -c
+            - maintenance_work_mem=32MB
+          env:
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: marigold-secrets, key: POSTGRES_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: marigold-secrets, key: POSTGRES_PASSWORD } }
+            - name: POSTGRES_DB
+              valueFrom: { secretKeyRef: { name: marigold-secrets, key: POSTGRES_DB } }
+            # The image refuses to initialise into a non-empty mount point
+            # (lost+found on some volumes), so data goes in a subdirectory.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: { memory: 150Mi, cpu: 50m }
+            limits: { memory: 400Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # k3s ships local-path as the default StorageClass. It is node-local,
+        # which is fine for a single-node cluster and is the reason the backup
+        # CronJob exists.
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 10Gi
