@@ -1,0 +1,54 @@
+# Redis, used only for login rate-limit counters.
+#
+# Nothing here is durable on purpose: these are short-lived counters, and
+# `backend/config.py` documents that losing them is acceptable while a
+# per-worker in-process fallback is not (it is not shared across processes).
+# ElastiCache would be ~$12/month for the same job.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels: { app: redis }
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+  selector: { app: redis }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: redis }
+  template:
+    metadata:
+      labels: { app: redis }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args:
+            - --maxmemory
+            - 64mb
+            # Counters are disposable; evicting the coldest under pressure is
+            # strictly better than the OOM killer taking the pod.
+            - --maxmemory-policy
+            - allkeys-lru
+            # No RDB snapshots and no AOF: nothing here is worth an fsync, and
+            # persistence would spend both disk and the memory for the fork.
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { memory: 20Mi, cpu: 10m }
+            limits: { memory: 80Mi }
