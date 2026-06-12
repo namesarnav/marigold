@@ -1,0 +1,79 @@
+# The Marigold application: FastAPI serving the API and the built Vite bundle
+# from a single image.
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+  labels: { app: marigold-app }
+spec:
+  ports:
+    - port: 80
+      targetPort: 8000
+      name: http
+  selector: { app: marigold-app }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+spec:
+  replicas: 1
+  # One node, one replica, and Postgres migrations that must not run from two
+  # image versions at once: stop the old pod before starting the new one.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: marigold-app }
+  template:
+    metadata:
+      labels: { app: marigold-app }
+    spec:
+      imagePullSecrets:
+        # Refreshed every 6h by the marigold-ecr-refresh systemd timer that
+        # infra/user_data/k3s-bootstrap.sh.tftpl installs. ECR tokens expire.
+        - name: ecr-creds
+      initContainers:
+        # Migrations run from the same image as the app, so the schema and the
+        # code that expects it can never be different versions. The pod does not
+        # start serving until this exits 0, which means a failed migration is a
+        # failed deploy rather than a running app against the wrong schema.
+        - name: migrate
+          image: marigold/app:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - secretRef: { name: marigold-secrets }
+            - configMapRef: { name: marigold-config }
+          resources:
+            requests: { memory: 100Mi, cpu: 50m }
+            limits: { memory: 300Mi }
+      containers:
+        - name: app
+          image: marigold/app:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef: { name: marigold-secrets }
+            - configMapRef: { name: marigold-config }
+          readinessProbe:
+            # /healthz runs SELECT 1, so a pod that cannot reach Postgres is
+            # never sent traffic.
+            httpGet: { path: /healthz, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            # Generous: a slow query under load must not be read as a dead
+            # process and restarted, which would turn pressure into a crash loop.
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests: { memory: 250Mi, cpu: 100m }
+            limits: { memory: 450Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop: ["ALL"]
