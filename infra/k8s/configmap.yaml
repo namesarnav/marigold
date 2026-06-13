@@ -1,0 +1,35 @@
+# Non-secret runtime configuration. Anything with a credential in it belongs in
+# `marigold-secrets`, which the deploy pipeline creates from GitHub Actions
+# secrets and which is never committed.
+#
+# The *_PLACEHOLDER tokens are substituted by render.sh from Terraform outputs.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: marigold-config
+data:
+  # In-cluster service DNS. Postgres is reached the same way but its URL carries
+  # a password, so it lives in the Secret instead.
+  REDIS_URL: "redis://redis:6379/0"
+
+  # Public URLs. These drive the links in verification and password-reset
+  # emails and the OAuth callback, so they must be the real HTTPS origin —
+  # an http:// value here sends users to a URL that redirects and drops the
+  # token.
+  FRONTEND_BASE_URL: "https://DOMAIN_PLACEHOLDER"
+  BACKEND_BASE_URL: "https://DOMAIN_PLACEHOLDER"
+  CORS_ORIGINS: "https://DOMAIN_PLACEHOLDER,https://www.DOMAIN_PLACEHOLDER"
+
+  # Sets Secure on the session cookie. Must be true here: the app is reachable
+  # from the internet, and without it the cookie can be sent in cleartext.
+  COOKIE_SECURE: "true"
+
+  # Real email delivery. Note SES starts in sandbox mode, where it will only
+  # deliver to *verified* addresses — signups from real users are silently
+  # dropped until production access is granted. See infra/README.md.
+  EMAIL_BACKEND: "ses"
+  SES_REGION: "AWS_REGION_PLACEHOLDER"
+  SES_FROM_EMAIL: "SES_FROM_EMAIL_PLACEHOLDER"
+
+  AWS_REGION: "AWS_REGION_PLACEHOLDER"
+  ARTIFACTS_BUCKET: "ARTIFACTS_BUCKET_PLACEHOLDER"
