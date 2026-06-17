@@ -1,0 +1,43 @@
+# Applied with `kubectl apply -k infra/k8s` — Kustomize is built into kubectl,
+# so the node needs no extra tooling installed.
+#
+# `marigold-secrets` is deliberately NOT listed here. It is created by the
+# deploy pipeline from GitHub Actions secrets, so no credential is ever
+# committed to this repository. See .github/workflows/deploy.yml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: marigold
+
+resources:
+  - configmap.yaml
+  - postgres.yaml
+  - redis.yaml
+  - app.yaml
+  - ingress.yaml
+  - backup-cronjob.yaml
+
+# NOTE: issuer.yaml is deliberately NOT listed. The ClusterIssuer is
+# cluster-scoped, and the `namespace:` above is a transformer that kustomize
+# applies to every resource it manages — including CRDs whose scope it cannot
+# know. Stamping a namespace onto a cluster-scoped object is at best ignored and
+# at worst rejected on apply, so render.sh emits the issuer as a separate
+# document ahead of this kustomization instead.
+
+images:
+  # The deploy workflow rewrites newName/newTag to the exact image it just
+  # pushed, so `apply -k` performs a single rollout at a pinned digest rather
+  # than applying :latest and then mutating it.
+  - name: marigold/app
+    newName: IMAGE_REPO_PLACEHOLDER
+    newTag: IMAGE_TAG_PLACEHOLDER
+
+labels:
+  # `includeSelectors: false` is deliberate. The deprecated `commonLabels` also
+  # injected these into each workload's `spec.selector`, and a Deployment's
+  # selector is immutable — so once applied, changing or removing this label
+  # would make every future apply fail until the Deployment was deleted by hand.
+  # Labelling the objects without touching selectors keeps that door open.
+  - pairs:
+      app.kubernetes.io/part-of: marigold
+    includeSelectors: false
