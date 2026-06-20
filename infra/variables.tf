@@ -123,3 +123,87 @@ variable "ecr_max_tagged_images" {
   type        = number
   default     = 10
 }
+
+# --- Domain and email ---------------------------------------------------------
+
+variable "domain_name" {
+  description = <<-EOT
+    The apex domain the app is served from, e.g. "marigold.app". No scheme, no
+    trailing dot, no "www." prefix — the www record is derived from this.
+
+    No default: this is deployment-specific, and a wrong value here produces a
+    hosted zone and a certificate for someone else's name.
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", var.domain_name))
+    error_message = "domain_name must be a bare domain like example.com — no scheme, no path, no trailing dot."
+  }
+
+  validation {
+    condition     = !startswith(var.domain_name, "www.")
+    error_message = "Use the apex domain; the www CNAME is created from it automatically."
+  }
+}
+
+variable "acme_email" {
+  description = <<-EOT
+    Contact address registered with Let's Encrypt. They email it when a
+    certificate is close to expiring without having renewed, which is the only
+    warning you get before the site starts serving an invalid certificate.
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.acme_email))
+    error_message = "acme_email must be a valid email address."
+  }
+}
+
+variable "dmarc_report_email" {
+  description = <<-EOT
+    Where aggregate DMARC reports are sent. Can be the same as acme_email.
+    Receiving mail providers send a daily XML summary of what passed and failed
+    authentication, which is how you find out DKIM broke before users do.
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.dmarc_report_email))
+    error_message = "dmarc_report_email must be a valid email address."
+  }
+}
+
+variable "github_repository" {
+  description = <<-EOT
+    The GitHub repo allowed to assume the CI deploy role, as "owner/name".
+
+    This is a security boundary, not a label: the OIDC trust policy scopes role
+    assumption to this exact repository. A wildcard here would let any repo on
+    GitHub push images to your registry and deploy to your cluster.
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$", var.github_repository))
+    error_message = "github_repository must be in owner/name form, e.g. arnavverma/marigold."
+  }
+}
+
+variable "backup_retention_days" {
+  description = <<-EOT
+    How long nightly database dumps are kept in S3.
+
+    This is the recovery window, not a tidiness setting: the database lives on
+    the node's root volume with no replica, so these dumps are the only thing
+    standing between an instance failure and total data loss.
+  EOT
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.backup_retention_days >= 7
+    error_message = "Keep at least 7 days of backups; a shorter window cannot survive a problem discovered over a weekend."
+  }
+}
