@@ -81,6 +81,26 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
     }
   }
 
+  # Nightly pg_dump output. This is the only copy of the database that is not
+  # on the node's root volume, so the retention window is the real recovery
+  # window: 30 days of nightly dumps is roughly 30 x a few MB, i.e. cents.
+  rule {
+    id     = "expire-old-backups"
+    status = "Enabled"
+
+    filter {
+      prefix = "backups/"
+    }
+
+    expiration {
+      days = var.backup_retention_days
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+
   # Multipart uploads that failed halfway are billed for their uploaded parts
   # until aborted, and are invisible in the console's object listing.
   rule {
