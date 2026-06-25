@@ -25,6 +25,26 @@ if ! command -v aws >/dev/null 2>&1; then
 fi
 aws configure set default.region "${aws_region}"
 
+# --- Swap ---------------------------------------------------------------------
+# A 2 GB swapfile on the root volume. t4g.small has 2 GB of RAM and has to hold
+# k3s, Postgres, Redis, cert-manager and the app; the pod memory limits keep the
+# steady state inside that, but a transient spike with no swap means the OOM
+# killer picks a victim, and it tends to pick Postgres.
+#
+# Swap is a cushion here, not a substitute for RAM — if this is being used
+# heavily and continuously, the answer is t4g.medium, not a bigger swapfile.
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+# The kubelet refuses to start on a swap-enabled node unless told otherwise;
+# that flag is passed in the k3s install below.
+sysctl -w vm.swappiness=10
+echo 'vm.swappiness=10' > /etc/sysctl.d/99-marigold-swappiness.conf
+
 # --- k3s ----------------------------------------------------------------------
 # Flags chosen for a single node on a small instance:
 #   --disable traefik   is NOT passed: Traefik is the ingress, and an ALB
@@ -37,6 +57,7 @@ if ! command -v k3s >/dev/null 2>&1; then
   curl -fsSL https://get.k3s.io | INSTALL_K3S_EXEC="\
     --disable metrics-server \
     --write-kubeconfig-mode 644 \
+    --kubelet-arg=fail-swap-on=false \
     --node-label marigold.io/role=all" sh -
 fi
 
@@ -47,6 +68,31 @@ for _ in $(seq 1 60); do
 done
 
 k3s kubectl create namespace ${project} --dry-run=client -o yaml | k3s kubectl apply -f -
+
+# --- kubectl ------------------------------------------------------------------
+# k3s bundles kubectl as a subcommand. A real `kubectl` on PATH means the deploy
+# commands sent over SSM read the same as they would anywhere else.
+ln -sf /usr/local/bin/k3s /usr/local/bin/kubectl
+echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' > /etc/profile.d/marigold-kube.sh
+
+# --- cert-manager -------------------------------------------------------------
+# Issues and renews the Let's Encrypt certificate for the ingress. Installed
+# from the static manifest rather than Helm so nothing extra has to exist on the
+# node. The ClusterIssuer itself is applied by the deploy pipeline, because it
+# needs the contact email, which is a Terraform variable rather than something
+# baked into this script.
+CERT_MANAGER_VERSION="v1.16.2"
+if ! k3s kubectl get namespace cert-manager >/dev/null 2>&1; then
+  k3s kubectl apply -f \
+    "https://github.com/cert-manager/cert-manager/releases/download/$${CERT_MANAGER_VERSION}/cert-manager.yaml"
+fi
+
+# The webhook must be serving before any Certificate or ClusterIssuer is
+# accepted; applying one too early fails with a connection refused that looks
+# like a config error but is just a race.
+for deploy in cert-manager cert-manager-webhook cert-manager-cainjector; do
+  k3s kubectl -n cert-manager rollout status "deployment/$${deploy}" --timeout=300s || true
+done
 
 # --- ECR pull credentials -----------------------------------------------------
 # ECR tokens expire every 12 hours, so this refreshes the image-pull secret on a
