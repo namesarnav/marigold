@@ -7,9 +7,34 @@ ssh_allowed_cidr = "203.0.113.4/32"
 # Contents of your public key, e.g. ~/.ssh/id_ed25519.pub
 ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... you@example.com"
 
+# --- Domain -------------------------------------------------------------------
+# The apex domain, bare: no https://, no www., no trailing dot.
+# DNS is registered elsewhere, so Terraform creates the hosted zone and you
+# point your registrar at the nameservers in the `route53_nameservers` output.
+# Nothing resolves — and no certificate can be issued — until you do.
+domain_name = "example.com"
+
+# Let's Encrypt contact address. They mail it if a renewal is failing, which is
+# the only warning before the site starts serving an expired certificate.
+acme_email = "you@example.com"
+
+# Where daily DMARC aggregate reports go. Can be the same address.
+dmarc_report_email = "you@example.com"
+
+# --- CI -----------------------------------------------------------------------
+# The GitHub repo permitted to assume the deploy role, as owner/name. This is a
+# security boundary: the OIDC trust policy is scoped to exactly this repo on
+# refs/heads/main, so no other repository can push images or deploy.
+github_repository = "your-github-username/marigold"
+
 # Optional overrides:
 # aws_region    = "us-east-1"
 #
 # t4g.small (default) is ~$18/mo all-in and fits the $20 ceiling.
 # t4g.medium is the originally specced size but costs ~$32/mo on demand.
 # instance_type = "t4g.medium"
+#
+# Nightly database dumps kept in S3. This is the recovery window: the database
+# lives on the node's root volume with no replica, so these dumps are the only
+# thing between an instance failure and total data loss. Minimum 7.
+# backup_retention_days = 30
