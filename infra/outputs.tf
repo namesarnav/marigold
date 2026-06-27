@@ -64,3 +64,38 @@ locals {
     "t4g.large"  = 49.06
   }
 }
+
+output "route53_nameservers" {
+  description = <<-EOT
+    Point your registrar at these four nameservers.
+
+    Nothing resolves until you do — not the site, and not the Let's Encrypt
+    HTTP-01 challenge, so the certificate cannot be issued either. Delegation
+    typically propagates within an hour but the TTL at the registrar governs.
+  EOT
+  value       = aws_route53_zone.main.name_servers
+}
+
+output "app_url" {
+  description = "Where the app will be served once DNS is delegated and the deploy has run."
+  value       = "https://${var.domain_name}"
+}
+
+output "github_actions_role_arn" {
+  description = <<-EOT
+    Set this as the AWS_DEPLOY_ROLE_ARN secret (or variable) in the GitHub
+    repository. The deploy workflow assumes it via OIDC; no AWS access key is
+    ever stored in GitHub.
+  EOT
+  value       = aws_iam_role.github_actions.arn
+}
+
+output "ses_sandbox_reminder" {
+  description = "Deliberately an output, not a comment: it is the step most likely to be forgotten."
+  value = join(" ", [
+    "SES is in SANDBOX mode until you request production access.",
+    "Until granted, it will only deliver to individually verified addresses and",
+    "will silently drop signup verification emails to real users.",
+    "Request it in the SES console for region ${var.aws_region}; approval is usually <24h.",
+  ])
+}
