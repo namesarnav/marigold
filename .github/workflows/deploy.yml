@@ -1,0 +1,91 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # Lets a failed deploy be retried without an empty commit.
+  workflow_dispatch:
+
+# Never let two deploys race to roll out different images.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  # Required for OIDC: GitHub mints the token AWS validates. No AWS access key
+  # is stored in this repository.
+  id-token: write
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      NAMESPACE: marigold
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume the deploy role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push the arm64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # The node is EC2 Graviton. An amd64 image will not run on it, and
+          # this is the single most common way a first deploy fails.
+          platforms: linux/arm64
+          push: true
+          # Tagged with the commit SHA, never only 'latest': the SHA is what
+          # makes a rollback able to name an exact build.
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/marigold/app:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/marigold/app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Render manifests
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+          ACME_EMAIL: ${{ vars.ACME_EMAIL }}
+          ARTIFACTS_BUCKET: ${{ vars.ARTIFACTS_BUCKET }}
+          SES_FROM_EMAIL: ${{ vars.SES_FROM_EMAIL }}
+          IMAGE_REPO: ${{ steps.ecr.outputs.registry }}/marigold/app
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          infra/k8s/render.sh > /tmp/manifests.yaml
+          echo "Rendered $(grep -c '^kind:' /tmp/manifests.yaml) resources."
+
+      - name: Deploy over SSM
+        env:
+          INSTANCE_ID: ${{ vars.INSTANCE_ID }}
+          PROJECT: marigold
+        # No application secret appears anywhere in this workflow. The node
+        # reads them from SSM Parameter Store itself, because SendCommand
+        # parameters are recorded in command history that anyone with
+        # ssm:ListCommands can read — passing a database password through here
+        # would leak it. The only credential this job holds is a short-lived
+        # OIDC role with ECR push and SendCommand on one instance.
+        run: bash .github/scripts/deploy-over-ssm.sh /tmp/manifests.yaml
+
+      - name: Report the deployed version
+        if: always()
+        run: echo "Deployed ${{ github.sha }} to https://${{ vars.DOMAIN }}"
