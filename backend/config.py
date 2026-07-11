@@ -10,6 +10,14 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
 
+    # --- Logging -----------------------------------------------------------
+    # Nothing else configures the root logger, so without this the application's
+    # own loggers emit nothing below WARNING: only Python's last-resort handler
+    # runs, and it drops INFO entirely. That silently hid two things worth
+    # seeing — the console email backend's verification links in development,
+    # and background card-generation progress in `kubectl logs`.
+    log_level: str = "INFO"
+
     # --- Cookie security ---------------------------------------------------
     # Sets the Secure flag on the session cookie. False locally (plain HTTP);
     # must be true anywhere the app is reachable over the internet, or the

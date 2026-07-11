@@ -1,3 +1,4 @@
+import logging
 import os
 
 from fastapi import Depends, FastAPI
@@ -12,6 +13,14 @@ from .database import get_db
 from .routes import auth, documents, flashcards, interactions, oauth_routes, quiz, stats
 
 settings = get_settings()
+
+# Give the root logger a handler. Uvicorn configures only its own loggers, so
+# without this every `logger.info` in the application goes nowhere and only
+# Python's last-resort handler (WARNING and above) produces any output at all.
+logging.basicConfig(
+    level=settings.log_level.upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 # NOTE: no `Base.metadata.create_all` here on purpose. The schema is owned by
 # Alembic (`alembic upgrade head`, run by the deployment's init container), so
