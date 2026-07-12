@@ -13,8 +13,13 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: the Python service
-FROM python:3.11-slim
+# Stage 2: the Python service.
+#
+# Split into `backend` and `production` so local development can build only the
+# first: docker-compose targets `backend` and skips the npm build entirely,
+# which turns a dev rebuild from about a minute into a few seconds. The Vite dev
+# server runs on the host against this API.
+FROM python:3.11-slim AS backend
 
 # PYTHONUNBUFFERED so logs reach kubectl logs as they happen rather than sitting
 # in a buffer; PYTHONDONTWRITEBYTECODE so the read-only-ish container filesystem
@@ -33,7 +38,6 @@ COPY backend/ ./backend/
 # container can run `alembic upgrade head` from this exact build — the schema
 # and the code that expects it are then always the same version.
 COPY alembic.ini ./
-COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
 # Run unprivileged. A container process does not need root, and the app writes
 # nothing to its own filesystem — uploads go to the database, artifacts to S3.
@@ -41,6 +45,15 @@ RUN useradd --create-home --uid 10001 app && chown -R app:app /app
 USER app
 
 EXPOSE 8000
+
+# Stage 3: what actually ships. Adds the built frontend, which the API serves
+# as static files. This is the default target, so a plain `docker build` and
+# the deploy pipeline both get the full image.
+FROM backend AS production
+
+# --chown because the backend stage already switched to the unprivileged user;
+# without it these land owned by root.
+COPY --chown=app:app --from=frontend-build /app/frontend/dist ./frontend/dist
 
 # Exec form, not shell form. The previous `CMD uvicorn ... ${PORT:-8000}` ran
 # under /bin/sh, which does not forward SIGTERM to its child, so every pod took
