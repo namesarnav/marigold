@@ -1,0 +1,101 @@
+# Local development stack: Postgres, Redis and the API.
+#
+# This is the dev environment. Production is the AWS/k3s deployment in infra/ —
+# see infra/README.md. The two are deliberately not the same thing: running a
+# second cloud environment would roughly double the AWS bill, and for this
+# project the useful properties of a dev environment (fast feedback, real
+# Postgres, throwaway data) are all available locally.
+#
+# What this does NOT exercise, and where the difference bites: Kubernetes
+# scheduling and probes, TLS and cert-manager, real SES delivery, and the
+# ingress. Those are only ever tested in production, so change them carefully.
+#
+#   docker compose up -d          start Postgres, Redis and the API
+#   docker compose logs -f api    follow the API logs
+#   docker compose down -v        stop and delete the data volume
+#
+# The Vite dev server is not containerised — run it on the host with
+# `cd frontend && npm run dev`. It talks to this API on :8000 (see
+# frontend/src/api.js) and hot reload works properly that way.
+
+name: marigold-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: marigold
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: marigold
+    ports:
+      # Published on 55432, not 5432, so this never collides with a Postgres
+      # already running on the host.
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marigold -d marigold"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    # Matches the production args so rate limiting behaves the same way here.
+    command: ["--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    ports:
+      - "56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      # Only the backend stage: skips the npm build, so a rebuild is seconds
+      # rather than a minute. The frontend runs on the host in dev.
+      target: backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://marigold:devpass@postgres:5432/marigold
+      REDIS_URL: redis://redis:6379/0
+
+      # Dev-only values. Production takes these from SSM Parameter Store via
+      # infra/scripts/put-secrets.sh — nothing here is a real credential.
+      SECRET_KEY: dev-only-not-a-real-secret-key
+      # The one thing you must supply. Export it in your shell or put it in a
+      # .env file next to this one; card generation fails without it, though
+      # everything else (auth, quizzes, the interaction log) works fine.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-unset}
+
+      CORS_ORIGINS: http://localhost:5173
+      FRONTEND_BASE_URL: http://localhost:5173
+      BACKEND_BASE_URL: http://localhost:8000
+
+      # Plain HTTP locally, so the session cookie must not be Secure-only or the
+      # browser will refuse to send it back.
+      COOKIE_SECURE: "false"
+      # Verification and reset emails are printed to the log instead of sent.
+      # Read the link out of `docker compose logs api`.
+      EMAIL_BACKEND: console
+    ports:
+      - "8000:8000"
+    volumes:
+      # Source is mounted so --reload picks up edits without a rebuild. Only
+      # rebuild when backend/requirements.txt changes.
+      - ./backend:/app/backend:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+    # Migrations run on every start. They are idempotent, and this is what keeps
+    # a dev database in step with the models after pulling someone's branch.
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  pgdata:
