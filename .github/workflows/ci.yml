@@ -1,11 +1,11 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
-  # Called by deploy.yml so a deploy cannot run on untested code.
+  # Called by deploy.yml, which is what runs these on main. Deliberately no
+  # `push` trigger: with one, every merge ran this suite twice — once here and
+  # once through deploy.yml — for identical results.
   workflow_call:
 
 # A newer push to the same branch makes an in-flight run irrelevant.
