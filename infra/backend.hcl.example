@@ -1,0 +1,25 @@
+# Copy to backend.hcl and fill in. Gitignored: it names your account's bucket.
+#
+# Create the bucket first — it must NOT be the artifacts bucket this config
+# manages, or the state ends up describing its own storage:
+#
+#   aws s3api create-bucket --bucket marigold-tfstate-<something-unique> \
+#     --region us-east-1
+#   aws s3api put-bucket-versioning --bucket marigold-tfstate-<...> \
+#     --versioning-configuration Status=Enabled
+#   aws s3api put-public-access-block --bucket marigold-tfstate-<...> \
+#     --public-access-block-configuration \
+#     "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+#
+# Versioning is not optional here: it is the only way back from a corrupted or
+# truncated state file.
+
+bucket = "marigold-tfstate-CHANGEME"
+key    = "infra/terraform.tfstate"
+region = "us-east-1"
+
+encrypt = true
+
+# S3-native state locking (Terraform 1.10+). No DynamoDB table required, which
+# is one fewer resource to create and pay for.
+use_lockfile = true

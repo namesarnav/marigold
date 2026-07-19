@@ -15,3 +15,7 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Terraform backend config names an account-specific bucket.
+backend.tf
+backend.hcl

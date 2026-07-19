@@ -1,0 +1,13 @@
+# Copy to backend.tf to move Terraform state into S3.
+#
+# Empty block on purpose: this is a *partial* configuration. The bucket and key
+# live in backend.hcl, which is gitignored, so no account-specific value is
+# committed. Initialise with:
+#
+#   terraform init -backend-config=backend.hcl -migrate-state
+#
+# Terraform will offer to copy the existing local state up; answer yes, then
+# delete terraform.tfstate and terraform.tfstate.backup locally.
+terraform {
+  backend "s3" {}
+}
