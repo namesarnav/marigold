@@ -1,4 +1,4 @@
-## FlashLearn
+## Marigold
 
 FlashLearn is a simple study app where you upload PDF notes and get AI-generated flashcards and timed quizzes.
 
