@@ -98,6 +98,42 @@ def _create_refresh_token(user_id: int, db: Session) -> str:
     return raw
 
 
+def _set_refresh_cookie(response: Response, raw: str) -> None:
+    """Attach the refresh-token cookie.
+
+    One helper for what used to be two identical `set_cookie` calls, in login
+    and in refresh. They had drifted from the session cookie: both omitted
+    `secure`, so the longest-lived credential the app issues — seven days, and
+    enough on its own to mint access tokens — was the one cookie the browser
+    would send over plain HTTP. `settings.cookie_secure` already drove the
+    SessionMiddleware flag; this puts the refresh cookie on the same switch,
+    which is false locally and true once RAILWAY_PUBLIC_DOMAIN is present.
+
+    `path` is explicit so `_clear_refresh_cookie` can match it: a deletion whose
+    attributes differ from the original leaves the cookie in place.
+    """
+    response.set_cookie(
+        key="refresh_token",
+        value=raw,
+        httponly=True,
+        secure=settings.cookie_secure,
+        max_age=settings.refresh_token_expire_days * 86400,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    """Remove the refresh cookie, matching the attributes it was set with."""
+    response.delete_cookie(
+        key="refresh_token",
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
 def _revoke_all_refresh_tokens(db: Session, user_id: int) -> None:
     """Log every existing session out. Used after a password reset."""
     (
@@ -120,13 +156,7 @@ def establish_session(
 
     access_token = _create_access_token(user.id)
     refresh_raw = _create_refresh_token(user.id, db)
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_raw,
-        httponly=True,
-        max_age=settings.refresh_token_expire_days * 86400,
-        samesite="lax",
-    )
+    _set_refresh_cookie(response, refresh_raw)
     return TokenResponse(
         access_token=access_token,
         email_verified=bool(user.email_verified),
@@ -273,13 +303,7 @@ def refresh(response: Response, refresh_token: str = Cookie(default=None), db: S
 
     access_token = _create_access_token(user.id)
     refresh_raw = _create_refresh_token(user.id, db)
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_raw,
-        httponly=True,
-        max_age=settings.refresh_token_expire_days * 86400,
-        samesite="lax",
-    )
+    _set_refresh_cookie(response, refresh_raw)
     return TokenResponse(
         access_token=access_token,
         email_verified=bool(user.email_verified),
@@ -296,7 +320,7 @@ def logout(request: Request, response: Response, refresh_token: str = Cookie(def
             db_token.revoked = True
             db.commit()
     request.session.clear()
-    response.delete_cookie("refresh_token")
+    _clear_refresh_cookie(response)
     return {"message": "Logged out"}
 
 

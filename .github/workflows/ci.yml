@@ -3,10 +3,12 @@ name: CI
 on:
   pull_request:
     branches: [main]
-  # Called by deploy.yml, which is what runs these on main. Deliberately no
-  # `push` trigger: with one, every merge ran this suite twice — once here and
-  # once through deploy.yml — for identical results.
-  workflow_call:
+  # Railway builds and deploys from `main` itself, so nothing else invokes this
+  # suite on a merge — it needs its own push trigger. The concurrency group
+  # below still cancels a run the next push has made irrelevant.
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 # A newer push to the same branch makes an in-flight run irrelevant.
 concurrency:

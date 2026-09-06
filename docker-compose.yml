@@ -1,14 +1,19 @@
 # Local development stack: Postgres, Redis and the API.
 #
-# This is the dev environment. Production is the AWS/k3s deployment in infra/ —
-# see infra/README.md. The two are deliberately not the same thing: running a
-# second cloud environment would roughly double the AWS bill, and for this
-# project the useful properties of a dev environment (fast feedback, real
-# Postgres, throwaway data) are all available locally.
+# This is the dev environment. Production is Railway, which builds the same
+# Dockerfile — see the Deployment section of the README. The two are
+# deliberately not the same thing: for this project the useful properties of a
+# dev environment (fast feedback, real Postgres, throwaway data) are all
+# available locally, and a second hosted environment costs money to keep warm.
 #
-# What this does NOT exercise, and where the difference bites: Kubernetes
-# scheduling and probes, TLS and cert-manager, real SES delivery, and the
-# ingress. Those are only ever tested in production, so change them carefully.
+# What this does NOT exercise, and where the difference bites: this targets the
+# `backend` stage, so it never builds or serves the frontend bundle, and it
+# does not run the entrypoint's `alembic upgrade head`-then-serve sequence.
+# It also skips TLS, real SES delivery, and the Secure cookie flag. To exercise
+# the image Railway actually runs, build and run the default target instead:
+#
+#   docker build -t marigold .
+#   docker run --rm -p 8000:8000 --env-file .env marigold
 #
 #   docker compose up -d          start Postgres, Redis and the API
 #   docker compose logs -f api    follow the API logs
@@ -66,8 +71,8 @@ services:
       DATABASE_URL: postgresql+psycopg://marigold:devpass@postgres:5432/marigold
       REDIS_URL: redis://redis:6379/0
 
-      # Dev-only values. Production takes these from SSM Parameter Store via
-      # infra/scripts/put-secrets.sh — nothing here is a real credential.
+      # Dev-only values. Production takes these from Railway's service
+      # variables — nothing here is a real credential.
       SECRET_KEY: dev-only-not-a-real-secret-key
       # The one thing you must supply. Export it in your shell or put it in a
       # .env file next to this one; card generation fails without it, though

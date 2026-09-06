@@ -29,3 +29,6 @@ backend/.python-version
 openapi.yaml
 */__pycache__
 */*/__pycache__
+
+# Agent scratch space and worktrees
+.claude/

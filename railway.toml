@@ -1,0 +1,33 @@
+# Railway service configuration.
+#
+# TOML rather than railway.json purely so this can carry comments; Railway
+# reads either. Anything set in the dashboard overrides what is here.
+
+[build]
+# Build the Dockerfile rather than letting Nixpacks infer the stack. Nixpacks
+# would see the Python app at the repo root and never run the frontend's
+# `npm run build`, so the API would come up serving no bundle at all — the
+# multi-stage Dockerfile is what puts frontend/dist into the image.
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# /healthz executes SELECT 1, so a container that is up but cannot reach
+# Postgres fails the check and Railway keeps the previous deployment serving
+# instead of cutting traffic over to a broken one.
+healthcheckPath = "/healthz"
+
+# Generous because the container migrates before it listens: the first deploy
+# against an empty database runs every revision from baseline, and a health
+# check that expires mid-migration would fail the deploy and retry it.
+healthcheckTimeout = 300
+
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# One replica, deliberately. The entrypoint runs `alembic upgrade head` at
+# start, and two replicas starting together would run it concurrently — the
+# migration takes a lock so they will not corrupt anything, but the loser waits
+# and can trip its health check. Scaling past one means moving migrations out
+# of the entrypoint into a release step first.
+numReplicas = 1

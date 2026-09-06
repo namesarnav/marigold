@@ -14,7 +14,6 @@ concepts by how likely you are to have forgotten them.
 | `backend/` | FastAPI: auth, PDF ingest, card generation, quizzes, the interaction log |
 | `frontend/` | React + Vite + Tailwind |
 | `ml/` | Knowledge tracing (SAKT) and concept clustering. A library — the API does not import it yet |
-| `infra/` | Terraform for AWS, and the Kubernetes manifests in `infra/k8s/` |
 
 ## Stack
 
@@ -24,7 +23,7 @@ concepts by how likely you are to have forgotten them.
 - **Auth** — JWT + bcrypt, email verification, password reset, Google/GitHub OAuth
 - **AI** — Google Gemini 2.5 Flash for card generation; PyMuPDF for PDF text
 - **ML** — PyTorch, sentence-transformers, scikit-learn
-- **Deployment** — single-node k3s on EC2 Graviton, Traefik ingress, Let's Encrypt
+- **Deployment** — Railway, one Docker image serving both the API and the bundle
 
 ## Local development
 
@@ -48,7 +47,8 @@ docker compose logs api | grep -A6 'email:console'
 `docker compose down -v` throws the database away.
 
 See the header of [`docker-compose.yml`](docker-compose.yml) for what this
-setup does *not* exercise (Kubernetes, TLS, real email delivery).
+setup does *not* exercise (the frontend bundle, TLS, real email delivery), and
+how to run the production image locally instead.
 
 ## Tests
 
@@ -76,17 +76,65 @@ alembic upgrade head
 
 ## Deployment
 
-Production is a single k3s node on EC2 Graviton, inside a ~$20/month budget
-that shapes most of the architecture — Postgres and Redis run in-cluster rather
-than as RDS and ElastiCache, and Traefik is the ingress rather than an ALB.
+Railway, from the [`Dockerfile`](Dockerfile). One service: the multi-stage build
+compiles the Vite bundle and the FastAPI app serves it as static files, so there
+is no second deployment, no cross-origin CORS, and no third-party cookie
+problem. Nothing is written to disk — PDFs are parsed in memory and the
+extracted text goes to Postgres — so the service needs no volume.
 
-The full runbook, the cost breakdown, and the reasoning behind each choice are
-in **[`infra/README.md`](infra/README.md)**.
+### First deploy
 
-Merging to `main` builds an arm64 image, pushes it to ECR, and rolls it out over
-SSM. No AWS credentials are stored in GitHub: CI assumes a role scoped to this
-repository via OIDC, and application secrets are read by the node itself from
-SSM Parameter Store.
+1. **Create the project.** In Railway, *New Project → Deploy from GitHub repo*,
+   and pick this repository. It reads [`railway.toml`](railway.toml) and builds
+   the Dockerfile; no other build configuration is needed.
+
+2. **Add the databases.** *New → Database → PostgreSQL*, then again for Redis.
+
+3. **Set the service variables** (*Variables* on the app service):
+
+   | Variable | Value |
+   | --- | --- |
+   | `SECRET_KEY` | `openssl rand -hex 32` |
+   | `GEMINI_API_KEY` | Your Google AI Studio key |
+   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+   | `REDIS_URL` | `${{Redis.REDIS_URL}}` |
+
+   Use the `${{...}}` reference syntax rather than pasting the URLs: a pasted
+   copy goes stale the moment a database is replaced. Every other variable has
+   a working default — [`.env.example`](.env.example) documents the full set.
+
+4. **Generate a domain.** *Settings → Networking → Generate Domain*. Railway
+   injects it as `RAILWAY_PUBLIC_DOMAIN`, and `backend/config.py` derives
+   `FRONTEND_BASE_URL`, `BACKEND_BASE_URL`, `CORS_ORIGINS` and `COOKIE_SECURE`
+   from it — so emailed links, OAuth callbacks and the Secure cookie flag are
+   all correct without being configured by hand. Setting any of them explicitly
+   overrides the derived value, which is how a custom domain is configured.
+
+Migrations run in the container's entrypoint, before uvicorn binds. A failed
+migration aborts the start, so the health check never passes and Railway keeps
+the previous deployment serving rather than cutting over to a container whose
+code and schema disagree.
+
+### After the first deploy
+
+Pushing to `main` redeploys. `/healthz` executes `SELECT 1`, so a container that
+is up but cannot reach Postgres is never sent traffic.
+
+Two things are not on by default and are worth knowing about:
+
+- `EMAIL_BACKEND` is `console`, so verification links are printed to the Railway
+  logs instead of being sent. Real signups need `EMAIL_BACKEND=ses` and SES
+  credentials.
+- OAuth buttons only appear for providers with credentials set. Each provider's
+  redirect URI is `https://<your-domain>/api/auth/oauth/<provider>/callback`.
+
+### Scaling past one instance
+
+`railway.toml` pins `numReplicas = 1` because the entrypoint migrates on every
+start; concurrent replicas would serialise on the migration lock and a loser can
+trip its own health check. Moving `alembic upgrade head` out of
+[`docker-entrypoint.sh`](docker-entrypoint.sh) into a pre-deploy command is the
+prerequisite for raising it.
 
 ## API
 
@@ -111,4 +159,4 @@ Working: accounts and OAuth, PDF upload with background card generation,
 flashcards, quizzes, stats, and the interaction log. The ML pipeline is
 validated against ASSISTments 2009 (held-out AUC 0.7535) but is **not yet wired
 into the product** — there is no scheduling endpoint, and nothing imports `ml/`.
-That is the next piece of work; see the end of `infra/README.md`.
+That is the next piece of work.

@@ -5,12 +5,15 @@
 frontend/node_modules
 frontend/dist
 
-# Not part of the app image: the ML pipeline is a separate concern and Terraform
-# state can contain secrets. Sending either to the build daemon is pure waste.
+# Not part of the app image: the ML pipeline is a separate concern, nothing in
+# the API imports it, and it pulls in PyTorch. Sending it to the builder would
+# add hundreds of megabytes to the context for no runtime benefit.
 ml/
-infra/
 .github/
 .git/
+# Agent worktrees: a second checkout of this repo, hundreds of megabytes of
+# build context that would be uploaded on every build and used by nothing.
+.claude/
 
 # Tests do not ship
 backend/tests/
