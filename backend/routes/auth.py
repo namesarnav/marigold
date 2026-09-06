@@ -33,6 +33,8 @@ from ..security import (
     PasswordPolicyError,
     TokenError,
     consume_email_token,
+    resolve_email_token,
+    spend_email_token,
     hash_password,
     issue_email_token,
     verify_password,
@@ -431,12 +433,18 @@ def forgot_password(
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
     """Set a new password from a reset link.
 
-    The token is validated and spent before the password is touched, and every
-    existing refresh token is revoked afterwards so a session an attacker may
-    already hold does not survive the reset.
+    The token is validated first, spent once the new password has been accepted,
+    and the password only written after that — so a request refused by the
+    password policy leaves the link usable, while a request that gets as far as
+    changing the credential can never be replayed. Every existing refresh token
+    is revoked afterwards, so a session an attacker may already hold does not
+    survive the reset.
     """
+    # Resolved but not yet spent. The policy check below can still reject this
+    # request, and burning the link on a password the user is being told to
+    # change would leave them with a dead link and an unchanged password.
     try:
-        user = consume_email_token(db, payload.token, EmailToken.RESET)
+        user, token_record = resolve_email_token(db, payload.token, EmailToken.RESET)
     except TokenError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -448,6 +456,11 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         )
+
+    # Past every check that can refuse the request, so the link is spent now.
+    # Still before the password is written: single-use has to be established
+    # before the credential changes, not after.
+    spend_email_token(db, token_record)
 
     user.password_hash = hash_password(payload.password)
 

@@ -173,6 +173,32 @@ export async function resendVerification(email) {
   return request("POST", "/api/auth/resend-verification", { email });
 }
 
+// Password reset
+
+/**
+ * Start a reset. Always resolves the same way.
+ *
+ * The endpoint answers identically for an address with an account and one
+ * without, so this cannot be used to find out who has registered. The UI must
+ * not claim an email was sent — only that one was sent *if* the account exists.
+ * Rate limited per address; that surfaces as a 429.
+ */
+export async function forgotPassword(email) {
+  return request("POST", "/api/auth/forgot-password", { email });
+}
+
+/**
+ * Set a new password from an emailed reset token.
+ *
+ * Returns a message, not a session: the backend revokes every refresh token as
+ * part of the reset, so anything an attacker already holds dies with it. That
+ * is also why this cannot log the user straight in — they sign in again with
+ * the new password.
+ */
+export async function resetPassword(token, password) {
+  return request("POST", "/api/auth/reset-password", { token, password });
+}
+
 // OAuth
 
 /**

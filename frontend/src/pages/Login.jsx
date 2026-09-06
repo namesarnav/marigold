@@ -14,6 +14,10 @@ export default function Login() {
   // page, carrying what went wrong in the query string. Without reading it the
   // user would bounce back to an ordinary login form with no idea why.
   const [error, setError] = useState(() => params.get("message") ?? "");
+  // ResetPassword sends the user here with ?reset=1 rather than logging them
+  // in: the reset revokes every refresh token, so there is no session to hand
+  // over and they have to sign in with the password they just chose.
+  const justReset = params.get("reset") === "1";
   const { setUser } = useAuth();
   const navigate = useNavigate();
 
@@ -42,6 +46,12 @@ export default function Login() {
           <h1 className="text-3xl font-serif text-fl-black mb-2">Welcome back.</h1>
           <p className="text-sm text-fl-muted font-sans mb-8">Sign in to your account to continue.</p>
 
+          {justReset && (
+            <p className="mb-6 text-sm font-sans text-fl-green border-l-4 border-fl-green bg-fl-card rounded-r-lg px-4 py-3">
+              Password updated. Sign in with your new one.
+            </p>
+          )}
+
           <OAuthButtons disabled={loading} />
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -57,7 +67,15 @@ export default function Login() {
               />
             </div>
             <div>
-              <label className="block text-sm font-sans font-medium text-fl-black mb-1.5">Password</label>
+              <div className="flex items-baseline justify-between mb-1.5">
+                <label className="block text-sm font-sans font-medium text-fl-black">Password</label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-sans text-fl-muted underline underline-offset-2 hover:text-fl-black transition-colors"
+                >
+                  Forgot?
+                </Link>
+              </div>
               <input
                 type="password"
                 value={password}

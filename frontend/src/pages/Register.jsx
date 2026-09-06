@@ -4,6 +4,7 @@ import { register, getMe } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import Navbar from "../components/Navbar.jsx";
 import OAuthButtons from "../components/OAuthButtons.jsx";
+import { checkPassword, MIN_PASSWORD_LENGTH, PASSWORD_HINT } from "../passwordPolicy.js";
 
 export default function Register() {
   const [name, setName] = useState("");
@@ -14,9 +15,17 @@ export default function Register() {
   const { setUser } = useAuth();
   const navigate = useNavigate();
 
+  const policyError = password ? checkPassword(password) : "";
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    // Saves a round trip that could only come back as a 422; the server
+    // enforces the same policy regardless.
+    const problem = checkPassword(password);
+    if (problem) return setError(problem);
+
     setLoading(true);
     try {
       await register(email, password, name);
@@ -75,10 +84,22 @@ export default function Register() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={8}
-                placeholder="Min. 8 characters"
+                minLength={MIN_PASSWORD_LENGTH}
+                autoComplete="new-password"
+                placeholder="••••••••••••"
                 className="w-full bg-fl-card border-[1.5px] border-fl-border rounded-lg px-4 py-3 text-sm font-sans text-fl-black placeholder-fl-muted focus:outline-none focus:border-fl-black transition-colors"
               />
+              {/* The form used to advertise "Min. 8 characters" while the
+                  server required 12 and three character classes, so a password
+                  the form accepted came back as a 422 the user had been given
+                  no way to anticipate. */}
+              <p
+                className={`mt-1.5 text-xs font-sans ${
+                  policyError ? "text-fl-red" : "text-fl-muted"
+                }`}
+              >
+                {policyError || PASSWORD_HINT}
+              </p>
             </div>
 
             {error && (

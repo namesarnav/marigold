@@ -12,6 +12,8 @@ import ResultsPage from "./pages/ResultsPage.jsx";
 import Pricing from "./pages/Pricing.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
 import OAuthCallback from "./pages/OAuthCallback.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 
 export default function App() {
   return (
@@ -29,6 +31,10 @@ export default function App() {
                 someone who does not have one yet. */}
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
+            {/* Public for the same reason: someone who has forgotten their
+                password by definition cannot sign in first. */}
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               path="/dashboard"
               element={<ProtectedRoute><Dashboard /></ProtectedRoute>}

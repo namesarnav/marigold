@@ -209,8 +209,17 @@ class TokenError(Exception):
     """Token was missing, forged, expired, or already spent."""
 
 
-def consume_email_token(db: Session, token: str, purpose: str) -> User:
-    """Validate `token` and spend it, returning the user it belongs to.
+def resolve_email_token(db: Session, token: str, purpose: str):
+    """Validate `token` without spending it.
+
+    Returns `(user, record)`; the caller spends the record with
+    `spend_email_token` once whatever else it needs to check has passed.
+
+    Split out from `consume_email_token` because the password reset has a second
+    thing that can fail *after* the token is good: the password policy. Marking
+    the token used first meant a rejected password burned the link — the user
+    was told to pick a stronger password and, on trying, that the link had
+    already been used, with nothing changed and no way forward but a new email.
 
     Every failure mode raises `TokenError`. Expiry is checked twice on purpose:
     once by the signer (`max_age`) and once against the stored `expires_at`, so
@@ -249,6 +258,21 @@ def consume_email_token(db: Session, token: str, purpose: str) -> User:
     if user is None:
         raise TokenError("This link is invalid. Please request a new one.")
 
+    return user, record
+
+
+def spend_email_token(db: Session, record: EmailToken) -> None:
+    """Mark a resolved token used. Single-use is enforced by `used_at`."""
     record.used_at = datetime.utcnow()
     db.commit()
+
+
+def consume_email_token(db: Session, token: str, purpose: str) -> User:
+    """Validate `token` and spend it in one step, returning its user.
+
+    The right shape when nothing can fail between the two — email verification,
+    where a valid token is the whole of the request.
+    """
+    user, record = resolve_email_token(db, token, purpose)
+    spend_email_token(db, record)
     return user

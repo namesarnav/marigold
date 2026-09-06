@@ -344,6 +344,60 @@ def test_reset_password_enforces_strength(client):
     assert resp.status_code == 422
 
 
+def test_a_rejected_password_does_not_burn_the_reset_link(client):
+    """A weak password must leave the link usable.
+
+    The token used to be spent before the password was checked, so a password
+    the policy refused consumed the link anyway: the user was told to choose a
+    stronger one and then, on doing exactly that, that the link had already been
+    used — with their password unchanged and no way forward but another email.
+    """
+    register_and_verify(client, "retry@example.com")
+    client.post("/api/auth/forgot-password", json={"email": "retry@example.com"})
+    token = token_from_link(latest_email_to("retry@example.com"), "/reset-password")
+
+    rejected = client.post(
+        "/api/auth/reset-password", json={"token": token, "password": "short"}
+    )
+    assert rejected.status_code == 422
+
+    # The same link, now with a password that passes.
+    accepted = client.post(
+        "/api/auth/reset-password",
+        json={"token": token, "password": "Sec0nd-Attempt!x"},
+    )
+    assert accepted.status_code == 200
+
+    # And it really did change the password, rather than merely reporting so.
+    assert client.post(
+        "/api/auth/login",
+        json={"email": "retry@example.com", "password": "Sec0nd-Attempt!x"},
+    ).status_code == 200
+
+
+def test_the_link_is_still_single_use_after_a_rejected_attempt(client):
+    """Retrying must not become a way to replay a spent token.
+
+    The fix moves *when* the token is spent; it must not stop it being spent.
+    """
+    register_and_verify(client, "burned@example.com")
+    client.post("/api/auth/forgot-password", json={"email": "burned@example.com"})
+    token = token_from_link(latest_email_to("burned@example.com"), "/reset-password")
+
+    client.post("/api/auth/reset-password", json={"token": token, "password": "short"})
+    assert client.post(
+        "/api/auth/reset-password",
+        json={"token": token, "password": "G00d-Password!x"},
+    ).status_code == 200
+
+    # Third time: the successful attempt consumed it.
+    replay = client.post(
+        "/api/auth/reset-password",
+        json={"token": token, "password": "Th1rd-Password!x"},
+    )
+    assert replay.status_code == 400
+
+
 def test_reset_password_revokes_existing_sessions(client):
     """A session an attacker already holds must not survive the reset."""
     # Not register_and_verify: that clears cookies, and this test needs the
