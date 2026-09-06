@@ -52,10 +52,61 @@ async function request(method, path, body, isFormData = false) {
   return handleResponse(res);
 }
 
+/**
+ * An error carrying the parts of a FastAPI error body the UI acts on.
+ *
+ * `code` is what makes the verification gate work: the backend answers every
+ * gated endpoint with a 403 whose detail is an object, and the UI has to tell
+ * "confirm your email" apart from an ordinary refusal.
+ */
+export class ApiError extends Error {
+  constructor(message, { status, code } = {}) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/**
+ * Pull a human-readable message out of FastAPI's `detail`.
+ *
+ * `detail` takes three shapes and the UI sees all three: a plain string from
+ * `HTTPException(detail="...")`, an object from the verification gate
+ * (`{code, message, email}`), and an array of field errors from a 422. Only
+ * the string case was handled, so a gated request rendered the object through
+ * `new Error(obj)` and put the literal text "[object Object]" on screen in
+ * place of "Confirm your email address to use Marigold."
+ */
+function describe(detail, status) {
+  if (typeof detail === "string" && detail) return detail;
+
+  if (Array.isArray(detail)) {
+    // 422 from Pydantic. `msg` alone reads better than the full locator, and
+    // these are almost always a single field.
+    const first = detail[0];
+    if (first?.msg) return first.msg;
+  }
+
+  if (detail && typeof detail === "object" && detail.message) {
+    return detail.message;
+  }
+
+  return `Request failed (${status})`;
+}
+
 async function handleResponse(res) {
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || `Request failed (${res.status})`);
+
+  if (!res.ok) {
+    const detail = data.detail;
+    throw new ApiError(describe(detail, res.status), {
+      status: res.status,
+      code: detail && typeof detail === "object" ? detail.code : undefined,
+    });
+  }
+
   return data;
 }
 
@@ -93,6 +144,67 @@ export async function logout() {
 
 export async function getMe() {
   return request("GET", "/api/auth/me");
+}
+
+// Email verification
+
+/**
+ * Spend a verification token from an emailed link.
+ *
+ * The backend returns a full session, so clicking the link in a browser that
+ * was never signed in logs the account in rather than bouncing to a form —
+ * which is why this stores the access token like login and register do.
+ */
+export async function verifyEmail(token) {
+  const data = await request("POST", "/api/auth/verify-email", { token });
+  setToken(data.access_token);
+  return data;
+}
+
+/**
+ * Ask for another verification email.
+ *
+ * Answers the same way for an unknown address, an already-verified account and
+ * a successful send — the endpoint refuses to leak which one it was — so the
+ * UI can only ever say "if that address needs confirming, it's on its way".
+ * Rate limited server-side; that surfaces as a 429.
+ */
+export async function resendVerification(email) {
+  return request("POST", "/api/auth/resend-verification", { email });
+}
+
+// OAuth
+
+/**
+ * Which providers the server has credentials for.
+ *
+ * Buttons are rendered from this rather than hardcoded, so a provider that is
+ * not configured is never offered — clicking it would 503.
+ */
+export async function getOAuthProviders() {
+  const data = await request("GET", "/api/auth/oauth/providers");
+  return data.providers ?? [];
+}
+
+/**
+ * Where to send the browser to start a provider flow.
+ *
+ * A full page navigation, not fetch: the provider redirects through its own
+ * consent screen and back, and the state/PKCE values live in a cookie the
+ * backend sets. XHR cannot follow that.
+ */
+export function oauthLoginUrl(provider) {
+  return `${BASE}/api/auth/oauth/${provider}/login`;
+}
+
+/**
+ * Finish a provider sign-in after the callback lands back on the SPA.
+ *
+ * The backend has already set the httpOnly refresh cookie on the redirect; all
+ * that is left is to trade it for an access token. Returns whether that worked.
+ */
+export async function completeOAuthLogin() {
+  return tryRefresh();
 }
 
 // Documents

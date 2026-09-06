@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { register, getMe } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import Navbar from "../components/Navbar.jsx";
+import OAuthButtons from "../components/OAuthButtons.jsx";
 
 export default function Register() {
   const [name, setName] = useState("");
@@ -21,6 +22,10 @@ export default function Register() {
       await register(email, password, name);
       const user = await getMe();
       setUser(user);
+      // A new password account is unverified, so this lands on the
+      // verification gate rather than the dashboard itself — that screen is
+      // where "check your inbox" and the resend button live. Navigating to
+      // /dashboard regardless keeps one destination for a successful signup.
       navigate("/dashboard");
     } catch (err) {
       setError(err.message);
@@ -37,6 +42,8 @@ export default function Register() {
         <div className="w-full max-w-sm animate-fade-up">
           <h1 className="text-3xl font-serif text-fl-black mb-2">Create your account.</h1>
           <p className="text-sm text-fl-muted font-sans mb-8">Start studying smarter in seconds.</p>
+
+          <OAuthButtons disabled={loading} />
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

@@ -29,7 +29,7 @@ export function ToastProvider({ children }) {
             }}
           >
             <span className="text-base">{t.type === "success" ? "✓" : "✕"}</span>
-            <span>{message}</span>
+            <span>{t.message}</span>
           </div>
         ))}
       </div>

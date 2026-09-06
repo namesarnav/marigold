@@ -10,6 +10,8 @@ import DeckView from "./pages/DeckView.jsx";
 import QuizModePage from "./pages/QuizModePage.jsx";
 import ResultsPage from "./pages/ResultsPage.jsx";
 import Pricing from "./pages/Pricing.jsx";
+import VerifyEmail from "./pages/VerifyEmail.jsx";
+import OAuthCallback from "./pages/OAuthCallback.jsx";
 
 export default function App() {
   return (
@@ -21,6 +23,12 @@ export default function App() {
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            {/* Both are landing points for a redirect from outside the SPA —
+                the emailed confirmation link, and the OAuth callback. Public,
+                because the whole point of each is to establish a session for
+                someone who does not have one yet. */}
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route
               path="/dashboard"
               element={<ProtectedRoute><Dashboard /></ProtectedRoute>}

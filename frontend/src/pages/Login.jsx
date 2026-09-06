@@ -1,14 +1,19 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { login, getMe } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import Navbar from "../components/Navbar.jsx";
+import OAuthButtons from "../components/OAuthButtons.jsx";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const [params] = useSearchParams();
+  const [email, setEmail] = useState(() => params.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  // A failed provider sign-in redirects here rather than rendering its own
+  // page, carrying what went wrong in the query string. Without reading it the
+  // user would bounce back to an ordinary login form with no idea why.
+  const [error, setError] = useState(() => params.get("message") ?? "");
   const { setUser } = useAuth();
   const navigate = useNavigate();
 
@@ -36,6 +41,8 @@ export default function Login() {
         <div className="w-full max-w-sm animate-fade-up">
           <h1 className="text-3xl font-serif text-fl-black mb-2">Welcome back.</h1>
           <p className="text-sm text-fl-muted font-sans mb-8">Sign in to your account to continue.</p>
+
+          <OAuthButtons disabled={loading} />
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
