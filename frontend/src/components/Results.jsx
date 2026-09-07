@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { getQuizResults } from "../api.js";
 
 export default function Results({ quizId, onRetry, onExit, onReview }) {
@@ -15,65 +15,64 @@ export default function Results({ quizId, onRetry, onExit, onReview }) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-3 text-sm text-fl-muted font-sans p-8">
-        <span className="h-4 w-4 border-2 border-fl-black border-t-transparent rounded-full animate-spin" />
-        Loading results…
+      <div className="flex justify-center py-16">
+        <span className="loading loading-spinner loading-lg text-primary" />
       </div>
     );
   }
 
-  if (error) return <p className="text-sm text-fl-red font-sans p-4">{error}</p>;
+  if (error) {
+    return (
+      <div role="alert" className="alert alert-error">
+        <span className="text-sm">{error}</span>
+      </div>
+    );
+  }
+
   if (!results) return null;
 
   const pct = results.percentage;
-  const grade = pct >= 80 ? "Great work!" : pct >= 60 ? "Good effort." : "Keep practicing.";
+  const grade = pct >= 80 ? "Great work" : pct >= 60 ? "Good effort" : "Keep practising";
+  const tone = pct >= 80 ? "text-success" : pct >= 60 ? "text-warning" : "text-error";
 
   return (
-    <div className="animate-fade-up max-w-lg">
-      <div className="flex items-center justify-between mb-8">
-        <h2 className="text-2xl font-serif text-fl-black">Results</h2>
-        <button onClick={onExit} className="text-sm font-sans text-fl-muted hover:text-fl-black transition-colors border border-fl-border rounded-lg px-3 py-1.5">
-          ← Back
-        </button>
-      </div>
+    <div className="animate-fade-up mx-auto max-w-xl">
+      <h2 className="mb-6 text-2xl">Results</h2>
 
-      {/* Score card */}
-      <div
-        className="bg-fl-card border border-fl-border rounded-xl p-8 mb-5"
-        style={{ boxShadow: "0 2px 8px rgba(40,40,40,0.04)" }}
-      >
-        <p className="text-sm font-sans text-fl-muted mb-1">{grade}</p>
-        <p className="text-5xl font-serif text-fl-black mb-1">
-          {results.score}<span className="text-fl-muted">/{results.total}</span>
+      <div className="surface mb-5 p-8 text-center shadow-subtle">
+        <p className={`text-sm font-medium ${tone}`}>{grade}</p>
+
+        <p className="mt-2 text-5xl font-semibold tracking-tight">
+          {results.score}
+          <span className="text-base-content/30">/{results.total}</span>
         </p>
-        <p className="text-2xl font-serif text-fl-muted">{pct.toFixed(0)}%</p>
-        <div className="mt-4 h-2 w-full bg-fl-border rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full bg-fl-green transition-all duration-500"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <p className="mt-3 text-xs font-sans text-fl-muted">
+        <p className="mt-1 text-lg text-base-content/50">{pct.toFixed(0)}%</p>
+
+        <progress
+          className={`progress mt-5 w-full ${
+            pct >= 80 ? "progress-success" : pct >= 60 ? "progress-warning" : "progress-error"
+          }`}
+          value={pct}
+          max="100"
+        />
+
+        <p className="mt-3 text-xs text-base-content/50">
           Time taken: {Math.round(results.time_taken_seconds)}s
         </p>
       </div>
 
-      {/* Wrong answers */}
       {results.wrong_answers?.length > 0 && (
         <div className="mb-6">
-          <p className="text-sm font-sans font-semibold text-fl-black mb-3">Review wrong answers</p>
-          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+          <p className="mb-3 text-sm font-medium">Where you slipped</p>
+          <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
             {results.wrong_answers.map((wa, i) => (
-              <div
-                key={i}
-                className="bg-fl-card border border-fl-border rounded-xl p-4"
-                style={{ boxShadow: "0 2px 8px rgba(40,40,40,0.04)" }}
-              >
-                <p className="text-xs font-sans text-fl-muted mb-2">{wa.question}</p>
-                <p className="text-xs font-sans text-fl-red">
-                  Your answer: <span className="font-medium">{wa.your_answer || "Skipped"}</span>
+              <div key={i} className="surface p-4">
+                <p className="text-sm">{wa.question}</p>
+                <p className="mt-2 text-xs text-error">
+                  Your answer:{" "}
+                  <span className="font-medium">{wa.your_answer || "Skipped"}</span>
                 </p>
-                <p className="text-xs font-sans text-fl-green mt-0.5">
+                <p className="mt-0.5 text-xs text-success">
                   Correct: <span className="font-medium">{wa.correct_answer}</span>
                 </p>
               </div>
@@ -82,26 +81,17 @@ export default function Results({ quizId, onRetry, onExit, onReview }) {
         </div>
       )}
 
-      <div className="flex gap-3 flex-wrap">
-        <button
-          onClick={onRetry}
-          className="btn-press flex-1 py-2.5 rounded-lg bg-fl-yellow hover:bg-fl-yellow-h text-fl-black text-sm font-sans font-semibold transition-colors"
-        >
+      <div className="flex flex-wrap gap-2">
+        <button onClick={onRetry} className="btn btn-primary flex-1">
           Retry quiz
         </button>
         {onReview && (
-          <button
-            onClick={() => onReview()}
-            className="btn-press flex-1 py-2.5 rounded-lg border border-fl-black text-fl-black text-sm font-sans font-semibold hover:bg-fl-black hover:text-cream transition-colors"
-          >
+          <button onClick={() => onReview()} className="btn btn-outline flex-1">
             Review answers
           </button>
         )}
-        <button
-          onClick={onExit}
-          className="flex-1 py-2.5 rounded-lg border border-fl-border text-fl-black text-sm font-sans font-semibold hover:border-fl-black transition-colors"
-        >
-          Back to flashcards
+        <button onClick={onExit} className="btn btn-ghost flex-1">
+          Back to deck
         </button>
       </div>
     </div>

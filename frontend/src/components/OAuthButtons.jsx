@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
 import { getOAuthProviders, oauthLoginUrl } from "../api.js";
 
-// Marks and labels for everything the backend supports. Keyed by the provider
-// string the API returns, so an unknown value is simply not rendered rather
-// than producing a button with no icon.
+// Marks and labels for everything the backend supports, keyed by the provider
+// string the API returns — an unknown value is simply not rendered rather than
+// producing a button with no icon.
 const PROVIDERS = {
   google: {
     label: "Continue with Google",
-    // Google's four-colour mark. Inline so it works with no network request
-    // and no icon dependency.
     icon: (
       <svg viewBox="0 0 18 18" className="h-[18px] w-[18px]" aria-hidden="true">
         <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62Z" />
@@ -33,13 +31,12 @@ const PROVIDERS = {
  *
  * The list comes from `/api/auth/oauth/providers`, which reports only the
  * providers the server actually holds credentials for. Rendering a fixed pair
- * of buttons would offer a sign-in that answers 503 the moment it is clicked —
- * on a deployment with no OAuth configured, which is the default, this
- * component renders nothing and the page is just the password form.
+ * would offer a sign-in that answers 503 the moment it is clicked — with no
+ * OAuth configured, which is the default, this renders nothing and the page is
+ * just the password form.
  *
- * Signing in is a full page navigation rather than a fetch: the flow leaves the
- * origin for the provider's consent screen and comes back to
- * /oauth/callback, and XHR cannot follow that.
+ * Signing in is a full page navigation, not a fetch: the flow leaves the origin
+ * for the provider's consent screen and comes back to /oauth/callback.
  */
 export default function OAuthButtons({ disabled = false }) {
   const [providers, setProviders] = useState([]);
@@ -47,8 +44,8 @@ export default function OAuthButtons({ disabled = false }) {
   useEffect(() => {
     let cancelled = false;
     getOAuthProviders()
-      // A failure here is not worth a visible error: the password form below
-      // still works, so the buttons just do not appear.
+      // Not worth a visible error: the password form still works, so the
+      // buttons simply do not appear.
       .catch(() => [])
       .then((list) => {
         if (!cancelled) setProviders(list);
@@ -63,7 +60,7 @@ export default function OAuthButtons({ disabled = false }) {
 
   return (
     <div className="mb-6">
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {available.map((name) => {
           const { label, icon } = PROVIDERS[name];
           return (
@@ -71,10 +68,8 @@ export default function OAuthButtons({ disabled = false }) {
               key={name}
               href={disabled ? undefined : oauthLoginUrl(name)}
               aria-disabled={disabled}
-              className={`btn-press flex items-center justify-center gap-2.5 w-full py-3 rounded-lg bg-fl-card border-[1.5px] border-fl-border text-fl-black text-[15px] font-sans font-medium transition-colors ${
-                disabled
-                  ? "opacity-60 pointer-events-none"
-                  : "hover:border-fl-black"
+              className={`btn btn-outline w-full justify-center gap-2.5 font-medium ${
+                disabled ? "pointer-events-none opacity-60" : ""
               }`}
             >
               {icon}
@@ -84,10 +79,8 @@ export default function OAuthButtons({ disabled = false }) {
         })}
       </div>
 
-      <div className="flex items-center gap-3 mt-6">
-        <span className="h-px flex-1 bg-fl-border" />
-        <span className="text-xs font-sans text-fl-muted uppercase tracking-wide">or</span>
-        <span className="h-px flex-1 bg-fl-border" />
+      <div className="divider my-6 text-xs uppercase tracking-wider text-base-content/40">
+        or
       </div>
     </div>
   );

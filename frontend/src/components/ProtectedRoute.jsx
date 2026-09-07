@@ -8,16 +8,15 @@ import VerifyEmailGate from "./VerifyEmailGate.jsx";
  * The verification check lives here rather than in each page for the same
  * reason the backend puts it in one dependency: every route wrapped in this is
  * covered automatically, including any added later. The two gates mirror each
- * other — if this one is ever bypassed the API still refuses, so the worst case
- * is an ugly error rather than an unverified account reaching real data.
+ * other — if this one is ever bypassed the API still refuses.
  */
 export default function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-cream flex items-center justify-center">
-        <span className="h-6 w-6 border-2 border-fl-black border-t-transparent rounded-full animate-spin" />
+      <div className="flex min-h-screen items-center justify-center bg-base-100">
+        <span className="loading loading-spinner loading-lg text-primary" />
       </div>
     );
   }
@@ -25,11 +24,10 @@ export default function ProtectedRoute({ children }) {
   if (!user) return <Navigate to="/login" replace />;
 
   // `verification_required` is the server telling us whether it is enforcing
-  // the gate. Checking it here keeps the two halves from disagreeing: with the
-  // gate off the API serves an unverified account normally, and blocking it in
-  // the UI anyway would leave the app unusable for a reason the backend no
-  // longer holds. It defaults to true, so an older server that does not send
-  // the field still gets gated.
+  // the gate. Checking it keeps the two halves from disagreeing: with the gate
+  // off the API serves an unverified account normally, and blocking it in the
+  // UI anyway would leave the app unusable for a reason the backend no longer
+  // holds. It defaults to true, so an older server still gets gated.
   const gated = user.verification_required !== false;
   if (gated && !user.email_verified) return <VerifyEmailGate />;
 

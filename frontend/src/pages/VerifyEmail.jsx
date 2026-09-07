@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getMe, verifyEmail } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
-import Navbar from "../components/Navbar.jsx";
+import AuthLayout from "../components/AuthLayout.jsx";
 
 /**
  * Where the emailed confirmation link lands.
@@ -10,8 +10,7 @@ import Navbar from "../components/Navbar.jsx";
  * The token is spent immediately on mount — there is no "click to confirm"
  * step, because arriving here *is* the click. The backend returns a full
  * session for it, so this also signs the account in: following the link in a
- * browser that was never logged in goes straight to the dashboard instead of
- * to a login form.
+ * browser that was never logged in goes straight to the dashboard.
  */
 export default function VerifyEmail() {
   const [params] = useSearchParams();
@@ -41,7 +40,7 @@ export default function VerifyEmail() {
         setUser(user);
         setStatus("done");
         // A beat on the confirmation before moving on, so the outcome is
-        // actually readable rather than a flash.
+        // readable rather than a flash.
         setTimeout(() => navigate("/dashboard", { replace: true }), 1200);
       } catch (err) {
         if (cancelled) return;
@@ -55,72 +54,49 @@ export default function VerifyEmail() {
     };
   }, [token, navigate, setUser]);
 
-  return (
-    <div className="min-h-screen bg-cream flex flex-col">
-      <Navbar />
-
-      <div className="flex-1 flex items-center justify-center px-4">
-        <div className="w-full max-w-md animate-fade-up text-center">
-          {status === "working" && (
-            <>
-              <span className="inline-block h-7 w-7 border-2 border-fl-black border-t-transparent rounded-full animate-spin mb-6" />
-              <h1 className="text-3xl font-serif text-fl-black mb-2">
-                Confirming your email…
-              </h1>
-              <p className="text-sm text-fl-muted font-sans">One moment.</p>
-            </>
-          )}
-
-          {status === "done" && (
-            <>
-              <div className="text-4xl mb-5">✓</div>
-              <h1 className="text-3xl font-serif text-fl-black mb-2">
-                You're all set.
-              </h1>
-              <p className="text-sm text-fl-muted font-sans">
-                Taking you to your dashboard…
-              </p>
-            </>
-          )}
-
-          {status === "missing" && (
-            <>
-              <h1 className="text-3xl font-serif text-fl-black mb-3">
-                Nothing to confirm.
-              </h1>
-              <p className="text-sm text-fl-muted font-sans mb-8">
-                This link is missing its token. Open the most recent link from
-                your inbox, or request a new one after signing in.
-              </p>
-              <Link
-                to="/login"
-                className="btn-press inline-block px-6 py-3 rounded-lg bg-fl-yellow hover:bg-fl-yellow-h text-fl-black text-[15px] font-sans font-semibold transition-colors"
-              >
-                Go to sign in
-              </Link>
-            </>
-          )}
-
-          {status === "failed" && (
-            <>
-              <h1 className="text-3xl font-serif text-fl-black mb-3">
-                That link didn't work.
-              </h1>
-              <p className="text-sm text-fl-muted font-sans mb-8">
-                {error || "The link may have expired or already been used."}
-              </p>
-              {/* Signing in lands on the gate, which is where a fresh link is
-                  requested — so this is the route back rather than a dead end. */}
-              <Link
-                to="/login"
-                className="btn-press inline-block px-6 py-3 rounded-lg bg-fl-yellow hover:bg-fl-yellow-h text-fl-black text-[15px] font-sans font-semibold transition-colors"
-              >
-                Sign in to get a new link
-              </Link>
-            </>
-          )}
+  if (status === "working") {
+    return (
+      <AuthLayout title="Confirming your email" subtitle="One moment.">
+        <div className="flex justify-center py-2">
+          <span className="loading loading-spinner loading-lg text-primary" />
         </div>
-      </div>
-    </div>
+      </AuthLayout>
+    );
+  }
+
+  if (status === "done") {
+    return (
+      <AuthLayout title="You're all set" subtitle="Taking you to your dashboard…">
+        <div className="flex justify-center py-2">
+          <span className="text-4xl" aria-hidden="true">✓</span>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  if (status === "missing") {
+    return (
+      <AuthLayout
+        title="Nothing to confirm"
+        subtitle="This link is missing its token. Open the most recent link from your inbox, or request a new one after signing in."
+      >
+        <Link to="/login" className="btn btn-primary w-full">
+          Go to sign in
+        </Link>
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout
+      title="That link didn't work"
+      subtitle={error || "The link may have expired or already been used."}
+    >
+      {/* Signing in lands on the gate, which is where a fresh link is
+          requested — so this is the route back rather than a dead end. */}
+      <Link to="/login" className="btn btn-primary w-full">
+        Sign in to get a new link
+      </Link>
+    </AuthLayout>
   );
 }

@@ -1,85 +1,106 @@
 import { Link } from "react-router-dom";
-import Navbar from "../components/Navbar.jsx";
 import Footer from "../components/Footer.jsx";
+import Navbar from "../components/Navbar.jsx";
+
+const STEPS = [
+  {
+    n: "01",
+    title: "Upload your notes",
+    body: "Drop in any PDF — lecture slides, a textbook chapter, your own notes.",
+  },
+  {
+    n: "02",
+    title: "Get flashcards back",
+    body: "Marigold reads the material and pulls out the key concepts as focused cards.",
+  },
+  {
+    n: "03",
+    title: "Study what's slipping",
+    body: "Review, take timed quizzes, and let Marigold tell you what you're forgetting.",
+  },
+];
+
+const FEATURES = [
+  {
+    icon: "🃏",
+    title: "Flashcards that flip",
+    body: "One concept at a time. Tap to reveal, mark what you knew, move at your own pace.",
+  },
+  {
+    icon: "⏱",
+    title: "Timed quizzes",
+    body: "Multiple choice against the clock — just enough pressure to make it stick.",
+  },
+  {
+    icon: "🎯",
+    title: "Knows what you forget",
+    body: "Every answer is recorded, so your review queue is ranked by what's actually fading.",
+  },
+];
+
+const SAMPLE_CARDS = [
+  { topic: "Biology", q: "What do mitochondria do?" },
+  { topic: "Biology", q: "Define osmosis" },
+  { topic: "Physics", q: "State Newton's second law" },
+];
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-cream font-sans">
+    <div className="min-h-screen bg-base-100">
       <Navbar />
 
       {/* Hero */}
-      <section className="px-6 md:px-12 pt-24 pb-20 max-w-6xl mx-auto">
+      <section className="page pb-16 pt-20 sm:pt-28">
         <div className="max-w-2xl animate-fade-up">
-          <h1 className="text-5xl md:text-6xl font-serif text-fl-black leading-tight mb-6">
-            Turn your notes into<br />
-            <span className="italic">knowledge.</span>
+          <span className="badge badge-ghost badge-sm mb-5 gap-1.5 font-medium">
+            <span aria-hidden="true">🌼</span> Spaced repetition, without the setup
+          </span>
+
+          <h1 className="text-4xl leading-[1.1] sm:text-5xl md:text-6xl">
+            Turn your notes into knowledge.
           </h1>
-          <p className="text-base font-sans text-fl-muted mb-8 leading-relaxed max-w-lg">
-            Upload any PDF — lecture slides, textbooks, notes —
-            and Marigold instantly creates flashcards and
-            quizzes so you can study smarter, not longer.
+
+          <p className="mt-5 max-w-lg text-base leading-relaxed text-base-content/70">
+            Upload a PDF and Marigold builds the flashcards and quizzes for you —
+            then keeps track of what you're forgetting, so revision starts with
+            whatever needs it most.
           </p>
-          <Link
-            to="/register"
-            className="btn-press inline-flex items-center gap-2 px-6 py-3 text-[15px] font-sans font-semibold text-fl-black bg-fl-yellow rounded-lg hover:bg-fl-yellow-h transition-colors duration-200"
-          >
-            Start studying free
-            <span>→</span>
-          </Link>
+
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Link to="/register" className="btn btn-primary">
+              Start studying free
+            </Link>
+            <Link to="/login" className="btn btn-ghost">
+              I have an account
+            </Link>
+          </div>
         </div>
 
-        {/* Mockup */}
-        <div className="mt-16 animate-fade-up" style={{ animationDelay: "150ms" }}>
-          <div className="grid grid-cols-3 gap-3 max-w-lg">
-            {[
-              { q: "What is the mitochondria?", a: "The powerhouse of the cell", topic: "Biology" },
-              { q: "Define osmosis", a: "Movement of water across a semipermeable membrane", topic: "Biology" },
-              { q: "Newton's 2nd Law", a: "F = ma", topic: "Physics" },
-            ].map((card, i) => (
-              <div
-                key={i}
-                className="bg-fl-card border border-fl-border rounded-xl p-4"
-                style={{ boxShadow: "0 2px 8px rgba(40,40,40,0.04)" }}
-              >
-                {card.topic && (
-                  <span className="inline-block px-2 py-0.5 rounded-full bg-fl-yellow text-fl-black text-[10px] font-sans font-semibold uppercase tracking-wider mb-2">
-                    {card.topic}
-                  </span>
-                )}
-                <p className="text-xs text-fl-muted mb-1 font-sans">Question</p>
-                <p className="text-xs text-fl-black font-sans leading-snug">{card.q}</p>
-              </div>
-            ))}
-          </div>
+        {/* A glance at the product rather than a stock illustration. */}
+        <div
+          className="mt-14 grid max-w-2xl gap-3 sm:grid-cols-3"
+          style={{ animationDelay: "120ms" }}
+        >
+          {SAMPLE_CARDS.map((c) => (
+            <div key={c.q} className="surface animate-fade-up p-4 opacity-0 shadow-subtle">
+              <span className="badge badge-primary badge-sm font-medium">{c.topic}</span>
+              <p className="mt-3 text-sm leading-snug text-base-content/80">{c.q}</p>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* How it works */}
-      <section className="px-6 md:px-12 py-16 border-t border-fl-border">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-serif text-fl-black mb-12">How it works</h2>
-          <div className="grid md:grid-cols-3 gap-8 stagger">
-            {[
-              {
-                n: "01",
-                title: "Upload your notes",
-                body: "Drop in any PDF. Lecture slides, textbook chapters, handwritten scans. We handle the rest.",
-              },
-              {
-                n: "02",
-                title: "Get instant flashcards",
-                body: "Our AI reads your material and pulls out the key concepts as clean, focused flashcards.",
-              },
-              {
-                n: "03",
-                title: "Test yourself",
-                body: "Take a timed quiz, track your score, and revisit what you got wrong until you've got it down.",
-              },
-            ].map((step) => (
-              <div key={step.n} className="animate-fade-up opacity-0">
-                <p className="text-fl-muted text-sm font-sans font-semibold mb-3">{step.n}</p>
-                <h3 className="text-xl font-serif text-fl-black mb-2">{step.title}</h3>
-                <p className="text-sm text-fl-muted font-sans leading-relaxed">{step.body}</p>
+      <section className="border-t border-base-300 bg-base-200/40">
+        <div className="page py-16">
+          <h2 className="text-2xl sm:text-3xl">How it works</h2>
+
+          <div className="stagger mt-10 grid gap-8 sm:grid-cols-3">
+            {STEPS.map((s) => (
+              <div key={s.n} className="animate-fade-up opacity-0">
+                <p className="mb-2 text-sm font-semibold text-primary">{s.n}</p>
+                <h3 className="text-lg">{s.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-base-content/60">{s.body}</p>
               </div>
             ))}
           </div>
@@ -87,47 +108,35 @@ export default function Landing() {
       </section>
 
       {/* Features */}
-      <section className="px-6 md:px-12 py-16 border-t border-fl-border">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-serif text-fl-black mb-12">Everything you need to study well</h2>
-          <div className="grid md:grid-cols-3 gap-4 stagger">
-            {[
-              {
-                title: "Flashcards that flip",
-                body: "Review key concepts one by one. Tap to reveal the answer. Move at your own pace.",
-              },
-              {
-                title: "Timed quizzes",
-                body: "30 seconds per question. Multiple choice. Just enough pressure to make it stick.",
-              },
-              {
-                title: "See your progress",
-                body: "Every quiz is saved. Review wrong answers, retry, and watch your scores improve.",
-              },
-            ].map((f) => (
-              <div
-                key={f.title}
-                className="card-hover animate-fade-up opacity-0 bg-fl-card border border-fl-border rounded-xl p-6"
-                style={{ boxShadow: "0 2px 8px rgba(40,40,40,0.04)" }}
-              >
-                <h3 className="text-lg font-serif text-fl-black mb-2">{f.title}</h3>
-                <p className="text-sm text-fl-muted font-sans leading-relaxed">{f.body}</p>
+      <section className="border-t border-base-300">
+        <div className="page py-16">
+          <h2 className="text-2xl sm:text-3xl">Everything you need to study well</h2>
+
+          <div className="stagger mt-10 grid gap-4 sm:grid-cols-3">
+            {FEATURES.map((f) => (
+              <div key={f.title} className="surface animate-fade-up p-6 opacity-0">
+                <span className="text-2xl" aria-hidden="true">{f.icon}</span>
+                <h3 className="mt-3 text-lg">{f.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-base-content/60">{f.body}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Banner */}
-      <section className="mx-6 md:mx-12 my-16 rounded-2xl bg-fl-yellow px-10 py-12 flex flex-col md:flex-row items-center justify-between gap-6">
-        <h2 className="text-3xl font-serif text-fl-black">Ready to study smarter?</h2>
-        <Link
-          to="/register"
-          className="btn-press flex-shrink-0 px-6 py-3 text-[15px] font-sans font-semibold rounded-lg hover:opacity-90 transition-opacity"
-          style={{ backgroundColor: "#282828", color: "#f8f3ec" }}
-        >
-          Get started free →
-        </Link>
+      {/* CTA */}
+      <section className="page py-16">
+        <div className="rounded-2xl bg-primary px-8 py-12 text-center sm:px-12">
+          <h2 className="text-2xl text-primary-content sm:text-3xl">
+            Ready to study smarter?
+          </h2>
+          <p className="mx-auto mt-3 max-w-md text-sm text-primary-content/80">
+            Free to start. Upload your first PDF and see what comes back.
+          </p>
+          <Link to="/register" className="btn mt-7 border-0 bg-base-100 text-base-content hover:bg-base-200">
+            Get started free
+          </Link>
+        </div>
       </section>
 
       <Footer />

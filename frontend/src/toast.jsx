@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
 
 const ToastCtx = createContext(null);
 
@@ -15,21 +15,17 @@ export function ToastProvider({ children }) {
   return (
     <ToastCtx.Provider value={toast}>
       {children}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
+
+      <div className="toast toast-end z-50">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`animate-slide-in flex items-center gap-2 bg-fl-card rounded-lg px-4 py-3 text-sm font-sans text-fl-black border-l-4 ${
-              t.type === "success" ? "border-fl-green" : "border-fl-red"
-            }`}
-            style={{
-              boxShadow: "0 4px 16px rgba(40,40,40,0.12)",
-              minWidth: "220px",
-              maxWidth: "320px",
-            }}
+            role="status"
+            className={`animate-slide-in alert ${
+              t.type === "success" ? "alert-success" : "alert-error"
+            } shadow-lift`}
           >
-            <span className="text-base">{t.type === "success" ? "✓" : "✕"}</span>
-            <span>{t.message}</span>
+            <span className="text-sm">{t.message}</span>
           </div>
         ))}
       </div>

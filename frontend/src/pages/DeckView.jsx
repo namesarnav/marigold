@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getDocument, getFlashcards } from "../api.js";
+import EditCards from "../components/EditCards.jsx";
 import Navbar from "../components/Navbar.jsx";
 import StudyMode from "../components/StudyMode.jsx";
-import EditCards from "../components/EditCards.jsx";
 
 export default function DeckView() {
   const { id: docId } = useParams();
@@ -40,36 +40,42 @@ export default function DeckView() {
   const reloadCards = async () => {
     setLoading(true);
     try {
-      const cards = await getFlashcards(docId);
-      setFlashcards(cards);
-    } catch (_) {}
-    finally { setLoading(false); }
+      setFlashcards(await getFlashcards(docId));
+    } catch (_) {
+      /* the existing cards stay on screen */
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-base-100">
       <Navbar />
-      <main className="max-w-3xl mx-auto px-6 py-8">
-        {/* Tab bar */}
+
+      <main className="page max-w-3xl py-8">
+        <div className="mb-6">
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="btn btn-ghost btn-xs -ml-2 gap-1 text-base-content/60"
+          >
+            ← Dashboard
+          </button>
+          {docName && <h1 className="mt-2 truncate text-2xl">{docName}</h1>}
+        </div>
+
         {!loading && !error && (
-          <div className="flex items-center gap-1 mb-6 border-b border-fl-border">
+          <div role="tablist" className="tabs tabs-bordered mb-6">
             <button
+              role="tab"
               onClick={() => setView("study")}
-              className={`px-4 py-2 text-sm font-sans font-medium transition-colors border-b-2 -mb-px ${
-                view === "study"
-                  ? "border-fl-black text-fl-black"
-                  : "border-transparent text-fl-muted hover:text-fl-black"
-              }`}
+              className={`tab ${view === "study" ? "tab-active font-medium" : ""}`}
             >
               Study
             </button>
             <button
+              role="tab"
               onClick={() => setView("edit")}
-              className={`px-4 py-2 text-sm font-sans font-medium transition-colors border-b-2 -mb-px ${
-                view === "edit"
-                  ? "border-fl-black text-fl-black"
-                  : "border-transparent text-fl-muted hover:text-fl-black"
-              }`}
+              className={`tab ${view === "edit" ? "tab-active font-medium" : ""}`}
             >
               Edit cards
             </button>
@@ -77,14 +83,15 @@ export default function DeckView() {
         )}
 
         {loading && (
-          <div className="flex items-center gap-3 text-sm text-fl-muted font-sans py-16">
-            <span className="h-5 w-5 border-2 border-fl-black border-t-transparent rounded-full animate-spin" />
-            Loading…
+          <div className="flex justify-center py-16">
+            <span className="loading loading-spinner loading-lg text-primary" />
           </div>
         )}
 
         {error && !loading && (
-          <p className="text-sm text-fl-red font-sans py-4">{error}</p>
+          <div role="alert" className="alert alert-error">
+            <span className="text-sm">{error}</span>
+          </div>
         )}
 
         {!loading && !error && view === "study" && (

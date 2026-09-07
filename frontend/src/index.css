@@ -3,23 +3,52 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    /* Winter's own base-100 is near-white; setting it here too stops the
+       browser painting its default white behind rubber-band scroll. */
+    background-color: oklch(var(--b1));
+  }
+
   body {
-    background-color: #f8f3ec;
-    color: #282828;
-    font-family: "Instrument Sans", sans-serif;
+    font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  h1, h2, h3 {
-    font-family: "Instrument Serif", Georgia, serif;
-    font-weight: 400;
+  /* Headings carry weight rather than a second typeface. Tight tracking is what
+     keeps Instrument Sans from looking wide and generic at display sizes. */
+  h1, h2, h3, h4 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  /* Visible focus everywhere, not just where a component opts in. Keyboard
+     users otherwise lose the caret entirely on DaisyUI's flatter controls. */
+  :focus-visible {
+    outline: 2px solid oklch(var(--p));
+    outline-offset: 2px;
   }
 }
 
-/* Animations */
+@layer components {
+  /* The page frame every screen shares: one max width, one gutter. */
+  .page {
+    @apply mx-auto w-full max-w-5xl px-5 sm:px-8;
+  }
+
+  /* A plain bordered surface. Winter's card has no border by default, and
+     borders read cleaner than shadows on an almost-white ground. */
+  .surface {
+    @apply rounded-xl border border-base-300 bg-base-100;
+  }
+}
+
+/* --- Motion ---------------------------------------------------------------
+   Small and consistent. Everything here is a fade or a short rise; nothing
+   moves far enough to be noticed as an animation. */
+
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -28,38 +57,35 @@
   to   { opacity: 1; }
 }
 
-.animate-fade-up {
-  animation: fadeUp 0.4s ease forwards;
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.3s ease forwards;
-}
+.animate-fade-up { animation: fadeUp 0.3s ease-out forwards; }
+.animate-fade-in { animation: fadeIn 0.25s ease-out forwards; }
+.animate-slide-in { animation: slideIn 0.2s ease-out forwards; }
 
-/* Stagger children */
 .stagger > *:nth-child(1) { animation-delay: 0ms; }
-.stagger > *:nth-child(2) { animation-delay: 80ms; }
-.stagger > *:nth-child(3) { animation-delay: 160ms; }
-.stagger > *:nth-child(4) { animation-delay: 240ms; }
-.stagger > *:nth-child(5) { animation-delay: 320ms; }
-.stagger > *:nth-child(6) { animation-delay: 400ms; }
+.stagger > *:nth-child(2) { animation-delay: 50ms; }
+.stagger > *:nth-child(3) { animation-delay: 100ms; }
+.stagger > *:nth-child(4) { animation-delay: 150ms; }
+.stagger > *:nth-child(5) { animation-delay: 200ms; }
+.stagger > *:nth-child(6) { animation-delay: 250ms; }
 
-/* Flashcard 3D flip */
-.card-scene {
-  perspective: 1000px;
-}
+/* --- Flashcard flip ------------------------------------------------------ */
+
+.card-scene { perspective: 1200px; }
 
 .card-3d {
   position: relative;
   transform-style: preserve-3d;
-  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
   width: 100%;
   height: 100%;
 }
 
-.card-3d.flipped {
-  transform: rotateY(180deg);
-}
+.card-3d.flipped { transform: rotateY(180deg); }
 
 .card-face {
   position: absolute;
@@ -68,38 +94,18 @@
   -webkit-backface-visibility: hidden;
 }
 
-.card-face-back {
-  transform: rotateY(180deg);
-}
+.card-face-back { transform: rotateY(180deg); }
 
-/* Card hover lift */
-.card-hover {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(40, 40, 40, 0.08);
-}
+/* --- Misc ----------------------------------------------------------------- */
 
-/* Button press */
-.btn-press {
-  transition: transform 0.1s ease, background-color 0.2s ease;
-}
-.btn-press:active {
-  transform: scale(0.97);
-}
+.timer-bar { transition: width 1s linear; }
 
-/* Timer bar */
-.timer-bar {
-  transition: width 1s linear;
-}
-
-/* Toast slide in */
-@keyframes slideIn {
-  from { opacity: 0; transform: translateX(16px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-
-.animate-slide-in {
-  animation: slideIn 0.2s ease forwards;
+/* Respect a system setting that asks for less movement. Everything above is
+   decorative, so it can all simply not happen. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

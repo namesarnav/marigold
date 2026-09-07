@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { login, getMe } from "../api.js";
+import { getMe, login } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
-import Navbar from "../components/Navbar.jsx";
+import AuthLayout from "../components/AuthLayout.jsx";
 import OAuthButtons from "../components/OAuthButtons.jsx";
 
 export default function Login() {
@@ -12,11 +12,11 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   // A failed provider sign-in redirects here rather than rendering its own
   // page, carrying what went wrong in the query string. Without reading it the
-  // user would bounce back to an ordinary login form with no idea why.
+  // user bounces back to an ordinary login form with no idea why.
   const [error, setError] = useState(() => params.get("message") ?? "");
   // ResetPassword sends the user here with ?reset=1 rather than logging them
   // in: the reset revokes every refresh token, so there is no session to hand
-  // over and they have to sign in with the password they just chose.
+  // over and they sign in with the password they just chose.
   const justReset = params.get("reset") === "1";
   const { setUser } = useAuth();
   const navigate = useNavigate();
@@ -27,8 +27,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      const user = await getMe();
-      setUser(user);
+      setUser(await getMe());
       navigate("/dashboard");
     } catch (err) {
       setError(err.message);
@@ -38,80 +37,71 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-cream flex flex-col">
-      <Navbar />
-
-      <div className="flex-1 flex items-center justify-center px-4">
-        <div className="w-full max-w-sm animate-fade-up">
-          <h1 className="text-3xl font-serif text-fl-black mb-2">Welcome back.</h1>
-          <p className="text-sm text-fl-muted font-sans mb-8">Sign in to your account to continue.</p>
-
-          {justReset && (
-            <p className="mb-6 text-sm font-sans text-fl-green border-l-4 border-fl-green bg-fl-card rounded-r-lg px-4 py-3">
-              Password updated. Sign in with your new one.
-            </p>
-          )}
-
-          <OAuthButtons disabled={loading} />
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-sans font-medium text-fl-black mb-1.5">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@example.com"
-                className="w-full bg-fl-card border-[1.5px] border-fl-border rounded-lg px-4 py-3 text-sm font-sans text-fl-black placeholder-fl-muted focus:outline-none focus:border-fl-black transition-colors"
-              />
-            </div>
-            <div>
-              <div className="flex items-baseline justify-between mb-1.5">
-                <label className="block text-sm font-sans font-medium text-fl-black">Password</label>
-                <Link
-                  to="/forgot-password"
-                  className="text-xs font-sans text-fl-muted underline underline-offset-2 hover:text-fl-black transition-colors"
-                >
-                  Forgot?
-                </Link>
-              </div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                className="w-full bg-fl-card border-[1.5px] border-fl-border rounded-lg px-4 py-3 text-sm font-sans text-fl-black placeholder-fl-muted focus:outline-none focus:border-fl-black transition-colors"
-              />
-            </div>
-
-            {error && (
-              <p className="text-sm text-fl-red font-sans">{error}</p>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-press w-full py-3 rounded-lg bg-fl-yellow hover:bg-fl-yellow-h text-fl-black text-[15px] font-sans font-semibold disabled:opacity-60 transition-colors mt-2"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="h-4 w-4 border-2 border-fl-black border-t-transparent rounded-full animate-spin" />
-                  Signing in…
-                </span>
-              ) : "Sign in"}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-fl-muted font-sans">
-            No account?{" "}
-            <Link to="/register" className="text-fl-black font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity">
-              Create one
-            </Link>
-          </p>
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Sign in to pick up where you left off."
+      footer={
+        <>
+          No account?{" "}
+          <Link to="/register" className="link link-hover font-medium text-base-content">
+            Create one
+          </Link>
+        </>
+      }
+    >
+      {justReset && (
+        <div role="status" className="alert alert-success mb-5 py-2.5">
+          <span className="text-sm">Password updated. Sign in with your new one.</span>
         </div>
-      </div>
-    </div>
+      )}
+
+      <OAuthButtons disabled={loading} />
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <label className="form-control w-full">
+          <div className="label pb-1.5 pt-0">
+            <span className="label-text font-medium">Email</span>
+          </div>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            placeholder="you@example.com"
+            className="input input-bordered w-full"
+          />
+        </label>
+
+        <label className="form-control w-full">
+          <div className="label pb-1.5 pt-0">
+            <span className="label-text font-medium">Password</span>
+            <Link to="/forgot-password" className="label-text-alt link link-hover">
+              Forgot?
+            </Link>
+          </div>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            placeholder="••••••••••••"
+            className="input input-bordered w-full"
+          />
+        </label>
+
+        {error && (
+          <div role="alert" className="alert alert-error py-2.5">
+            <span className="text-sm">{error}</span>
+          </div>
+        )}
+
+        <button type="submit" disabled={loading} className="btn btn-primary w-full">
+          {loading && <span className="loading loading-spinner loading-sm" />}
+          {loading ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+    </AuthLayout>
   );
 }

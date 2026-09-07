@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { getQuizReview } from "../api.js";
 
 export default function QuizReview({ quizId, onRetake, onBack }) {
@@ -15,14 +15,20 @@ export default function QuizReview({ quizId, onRetake, onBack }) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-fl-muted font-sans p-8">
-        <span className="h-4 w-4 border-2 border-fl-black border-t-transparent rounded-full animate-spin" />
-        Loading review…
+      <div className="flex justify-center py-16">
+        <span className="loading loading-spinner loading-lg text-primary" />
       </div>
     );
   }
 
-  if (error) return <p className="text-sm text-fl-red font-sans p-4">{error}</p>;
+  if (error) {
+    return (
+      <div role="alert" className="alert alert-error">
+        <span className="text-sm">{error}</span>
+      </div>
+    );
+  }
+
   if (!review) return null;
 
   const correct = review.questions.filter((q) => q.is_correct).length;
@@ -30,92 +36,68 @@ export default function QuizReview({ quizId, onRetake, onBack }) {
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
 
   return (
-    <div className="animate-fade-up max-w-2xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="animate-fade-up mx-auto max-w-2xl">
+      <div className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <button onClick={onBack} className="text-xs font-sans text-fl-muted hover:text-fl-black transition-colors mb-1 flex items-center gap-1">
+          <button onClick={onBack} className="btn btn-ghost btn-xs -ml-2 text-base-content/60">
             ← Back
           </button>
-          <h2 className="text-2xl font-serif text-fl-black">Quiz Review</h2>
+          <h2 className="mt-1 text-2xl">Quiz review</h2>
         </div>
-        <button
-          onClick={onRetake}
-          className="btn-press px-4 py-2 rounded-lg bg-fl-yellow hover:bg-fl-yellow-h text-fl-black text-sm font-sans font-semibold transition-colors"
-        >
+        <button onClick={onRetake} className="btn btn-primary btn-sm">
           Retake quiz
         </button>
       </div>
 
-      {/* Score summary */}
-      <div
-        className="bg-fl-card border border-fl-border rounded-xl px-6 py-4 mb-6 flex items-center gap-6"
-        style={{ boxShadow: "0 2px 8px rgba(40,40,40,0.04)" }}
-      >
+      <div className="surface mb-6 flex items-center gap-5 px-6 py-4 shadow-subtle">
         <div>
-          <p className="text-3xl font-serif text-fl-black">
-            {correct}<span className="text-fl-muted text-xl"> / {total}</span>
+          <p className="text-2xl font-semibold tracking-tight">
+            {correct}
+            <span className="text-base-content/30"> / {total}</span>
           </p>
-          <p className="text-xs font-sans text-fl-muted mt-0.5">correct</p>
+          <p className="text-xs text-base-content/50">correct</p>
         </div>
-        <div className="flex-1">
-          <div className="h-2 w-full bg-fl-border rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-fl-green transition-all duration-500"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        </div>
-        <p className="text-2xl font-serif text-fl-black">{pct}%</p>
+        <progress className="progress progress-primary flex-1" value={pct} max="100" />
+        <p className="text-xl font-semibold tabular-nums">{pct}%</p>
       </div>
 
-      {/* Question list */}
       <div className="space-y-3">
         {review.questions.map((q, i) => (
-          <div
-            key={i}
-            className="bg-fl-card border border-fl-border rounded-xl p-5"
-            style={{ boxShadow: "0 2px 8px rgba(40,40,40,0.04)" }}
-          >
-            {/* Question text */}
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <p className="text-base font-serif text-fl-black leading-snug flex-1">{q.question}</p>
-              <div className="flex items-center gap-2 shrink-0">
+          <div key={i} className="surface p-5">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <p className="flex-1 leading-snug">{q.question}</p>
+
+              <div className="flex shrink-0 items-center gap-2">
                 {q.user_answer === null ? (
-                  <span className="px-2 py-0.5 rounded-full bg-fl-border text-fl-muted text-[10px] font-sans font-semibold uppercase tracking-wider">
-                    Skipped
-                  </span>
+                  <span className="badge badge-ghost badge-sm">Skipped</span>
                 ) : q.is_correct ? (
-                  <span className="text-fl-green text-sm font-sans font-semibold">✓</span>
+                  <span className="badge badge-success badge-sm gap-1">✓</span>
                 ) : (
-                  <span className="text-fl-red text-sm font-sans font-semibold">✗</span>
+                  <span className="badge badge-error badge-sm gap-1">✗</span>
                 )}
                 {q.time_taken_seconds != null && (
-                  <span className="text-[11px] font-sans text-fl-muted">{q.time_taken_seconds}s</span>
+                  <span className="text-xs text-base-content/40">
+                    {q.time_taken_seconds}s
+                  </span>
                 )}
               </div>
             </div>
 
-            {/* Options */}
             <div className="space-y-1.5">
               {q.options.map((opt) => {
                 const isCorrect = opt === q.correct_answer;
                 const isUserWrong = opt === q.user_answer && !q.is_correct;
-                let cls = "px-3 py-2 rounded-lg text-sm font-sans border transition-none ";
-                if (isCorrect) {
-                  cls += "bg-fl-green/15 border-fl-green text-fl-black font-medium";
-                } else if (isUserWrong) {
-                  cls += "bg-fl-red/15 border-fl-red text-fl-black";
-                } else {
-                  cls += "bg-cream border-fl-border text-fl-muted";
-                }
+
+                let cls = "flex items-center justify-between rounded-lg border px-3 py-2 text-sm ";
+                if (isCorrect) cls += "border-success bg-success/10";
+                else if (isUserWrong) cls += "border-error bg-error/10";
+                else cls += "border-base-300 bg-base-200/40 text-base-content/50";
+
                 return (
                   <div key={opt} className={cls}>
-                    <span className="flex items-center justify-between">
-                      <span>{opt}</span>
-                      {isCorrect && <span className="text-fl-green text-xs">✓ correct</span>}
-                      {isUserWrong && <span className="text-fl-red text-xs">your answer</span>}
-                    </span>
+                    <span>{opt}</span>
+                    {isCorrect && <span className="text-xs text-success">✓ correct</span>}
+                    {isUserWrong && <span className="text-xs text-error">your answer</span>}
                   </div>
                 );
               })}

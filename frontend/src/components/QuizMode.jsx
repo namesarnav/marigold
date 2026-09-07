@@ -1,21 +1,29 @@
-import { useState, useEffect } from "react";
-import { startQuiz, submitAnswer, skipQuestion } from "../api.js";
+import { useEffect, useState } from "react";
+import { skipQuestion, startQuiz, submitAnswer } from "../api.js";
+
+const SECONDS_PER_QUESTION = 30;
+const LENGTHS = [5, 10, 15];
 
 export default function QuizMode({ docId, onExit, onComplete }) {
   const [quizId, setQuizId] = useState(null);
   const [question, setQuestion] = useState(null);
   const [selected, setSelected] = useState("");
-  const [timer, setTimer] = useState(30);
+  const [timer, setTimer] = useState(SECONDS_PER_QUESTION);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [numQuestions, setNumQuestions] = useState(10);
 
+  // Restart the countdown whenever a new question arrives. Keyed on the
+  // question id, not the object, so a re-render does not reset the clock.
   useEffect(() => {
     if (!quizId || !question) return;
-    setTimer(30);
+    setTimer(SECONDS_PER_QUESTION);
     const id = setInterval(() => {
       setTimer((t) => {
-        if (t <= 1) { clearInterval(id); return 0; }
+        if (t <= 1) {
+          clearInterval(id);
+          return 0;
+        }
         return t - 1;
       });
     }, 1000);
@@ -51,7 +59,7 @@ export default function QuizMode({ docId, onExit, onComplete }) {
     setLoading(true);
     setError("");
     try {
-      advance(await submitAnswer(quizId, selected, 30 - timer));
+      advance(await submitAnswer(quizId, selected, SECONDS_PER_QUESTION - timer));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -63,7 +71,7 @@ export default function QuizMode({ docId, onExit, onComplete }) {
     setLoading(true);
     setError("");
     try {
-      advance(await skipQuestion(quizId, 30 - timer));
+      advance(await skipQuestion(quizId, SECONDS_PER_QUESTION - timer));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -71,118 +79,121 @@ export default function QuizMode({ docId, onExit, onComplete }) {
     }
   };
 
-  const timerPct = (timer / 30) * 100;
-  const timerColor = timer <= 5 ? "#e05c5c" : "#ffe459";
+  const timerPct = (timer / SECONDS_PER_QUESTION) * 100;
+  const urgent = timer <= 5;
 
-  return (
-    <div className="animate-fade-up">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <h2 className="text-2xl font-serif text-fl-black">Quiz Mode</h2>
-        <button onClick={onExit} className="text-sm font-sans text-fl-muted hover:text-fl-black transition-colors border border-fl-border rounded-lg px-3 py-1.5">
-          ← Back
+  // --- Setup ---------------------------------------------------------------
+
+  if (!question) {
+    return (
+      <div className="animate-fade-up">
+        <button onClick={onExit} className="btn btn-ghost btn-xs -ml-2 mb-4 text-base-content/60">
+          ← Back to deck
         </button>
-      </div>
 
-      {!question && (
-        <div
-          className="bg-fl-card border border-fl-border rounded-xl p-8 max-w-md"
-          style={{ boxShadow: "0 2px 8px rgba(40,40,40,0.04)" }}
-        >
-          <h3 className="text-xl font-serif text-fl-black mb-1">Ready to test yourself?</h3>
-          <p className="text-sm text-fl-muted font-sans mb-6">30 seconds per question. Choose how many you want.</p>
-          <div className="flex items-center gap-4 mb-6">
-            {[5, 10, 15].map((n) => (
+        <div className="surface mx-auto max-w-md p-7 shadow-subtle">
+          <h2 className="text-xl">Ready to test yourself?</h2>
+          <p className="mt-1.5 text-sm text-base-content/60">
+            {SECONDS_PER_QUESTION} seconds per question. Choose how many.
+          </p>
+
+          <div className="join mt-6 w-full">
+            {LENGTHS.map((n) => (
               <button
                 key={n}
                 onClick={() => setNumQuestions(n)}
-                className={`btn-press flex-1 py-2 rounded-lg text-sm font-sans font-semibold border transition-all ${
-                  numQuestions === n
-                    ? "bg-fl-yellow border-fl-yellow text-fl-black"
-                    : "bg-fl-card border-fl-border text-fl-black hover:border-fl-black"
+                className={`btn join-item flex-1 ${
+                  numQuestions === n ? "btn-primary" : "btn-outline"
                 }`}
               >
-                {n} Q
+                {n}
               </button>
             ))}
           </div>
-          {error && <p className="text-sm text-fl-red font-sans mb-4">{error}</p>}
+
+          {error && (
+            <div role="alert" className="alert alert-error mt-5 py-2.5">
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
+
           <button
             onClick={handleStart}
             disabled={loading}
-            className="btn-press w-full py-3 rounded-lg bg-fl-yellow hover:bg-fl-yellow-h text-fl-black text-[15px] font-sans font-semibold disabled:opacity-60 transition-colors"
+            className="btn btn-primary mt-6 w-full"
           >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="h-4 w-4 border-2 border-fl-black border-t-transparent rounded-full animate-spin" />
-                Starting…
-              </span>
-            ) : "Start quiz →"}
+            {loading && <span className="loading loading-spinner loading-sm" />}
+            {loading ? "Starting…" : "Start quiz"}
           </button>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {question && (
-        <div className="max-w-lg animate-fade-in">
-          {/* Progress */}
-          <div className="flex items-center justify-between text-xs font-sans font-medium text-fl-muted mb-2">
-            <span>Question {question.question_number} of {question.total_questions}</span>
-            <span className={timer <= 5 ? "text-fl-red font-semibold" : ""}>{timer}s</span>
-          </div>
+  // --- In progress ---------------------------------------------------------
 
-          {/* Timer bar */}
-          <div className="h-1 w-full bg-fl-border rounded-full mb-6 overflow-hidden">
-            <div
-              className="h-full rounded-full timer-bar"
-              style={{ width: `${timerPct}%`, backgroundColor: timerColor }}
-            />
-          </div>
+  return (
+    <div className="animate-fade-up mx-auto max-w-xl">
+      <div className="mb-2 flex items-center justify-between text-xs font-medium">
+        <span className="text-base-content/60">
+          Question {question.question_number} of {question.total_questions}
+        </span>
+        <span className={urgent ? "text-error" : "text-base-content/60"}>{timer}s</span>
+      </div>
 
-          {/* Question */}
-          <div
-            className="bg-fl-card border border-fl-border rounded-xl p-6 mb-5"
-            style={{ boxShadow: "0 2px 8px rgba(40,40,40,0.04)" }}
-          >
-            <p className="text-base font-sans text-fl-black leading-relaxed">{question.text}</p>
-          </div>
+      {/* A plain div rather than <progress>: the width transition is what makes
+          the countdown read as continuous, and progress elements do not
+          animate their value. */}
+      <div className="mb-6 h-1 w-full overflow-hidden rounded-full bg-base-300">
+        <div
+          className={`timer-bar h-full rounded-full ${urgent ? "bg-error" : "bg-primary"}`}
+          style={{ width: `${timerPct}%` }}
+        />
+      </div>
 
-          {/* Options */}
-          <div className="space-y-2 mb-5">
-            {question.options.map((opt) => (
-              <button
-                key={opt}
-                onClick={() => setSelected(opt)}
-                className={`btn-press w-full text-left px-4 py-3 rounded-lg border text-sm font-sans transition-all ${
-                  selected === opt
-                    ? "bg-fl-yellow border-fl-yellow text-fl-black font-medium"
-                    : "bg-fl-card border-fl-border text-fl-black hover:border-fl-black"
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
+      <div className="surface mb-5 p-6 shadow-subtle">
+        <p className="leading-relaxed">{question.text}</p>
+      </div>
 
-          {error && <p className="text-sm text-fl-red font-sans mb-3">{error}</p>}
-
-          <div className="flex items-center gap-3">
+      <div className="mb-5 space-y-2">
+        {question.options.map((opt) => {
+          const active = selected === opt;
+          return (
             <button
-              onClick={handleSubmit}
-              disabled={loading || !selected}
-              className="btn-press flex-1 py-2.5 rounded-lg bg-fl-yellow hover:bg-fl-yellow-h text-fl-black text-sm font-sans font-semibold disabled:opacity-50 transition-colors"
+              key={opt}
+              onClick={() => setSelected(opt)}
+              aria-pressed={active}
+              className={`w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
+                active
+                  ? "border-primary bg-primary text-primary-content font-medium"
+                  : "border-base-300 bg-base-100 hover:border-primary/50 hover:bg-base-200/50"
+              }`}
             >
-              Submit
+              {opt}
             </button>
-            <button
-              onClick={handleSkip}
-              disabled={loading}
-              className="px-4 py-2.5 rounded-lg border border-fl-border text-sm font-sans text-fl-muted hover:border-fl-black hover:text-fl-black transition-all disabled:opacity-50"
-            >
-              Skip
-            </button>
-          </div>
+          );
+        })}
+      </div>
+
+      {error && (
+        <div role="alert" className="alert alert-error mb-4 py-2.5">
+          <span className="text-sm">{error}</span>
         </div>
       )}
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleSubmit}
+          disabled={loading || !selected}
+          className="btn btn-primary flex-1"
+        >
+          {loading && <span className="loading loading-spinner loading-sm" />}
+          Submit
+        </button>
+        <button onClick={handleSkip} disabled={loading} className="btn btn-ghost">
+          Skip
+        </button>
+      </div>
     </div>
   );
 }

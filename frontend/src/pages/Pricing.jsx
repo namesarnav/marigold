@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import Navbar from "../components/Navbar.jsx";
 import Footer from "../components/Footer.jsx";
+import Navbar from "../components/Navbar.jsx";
 
 const PLANS = [
   {
@@ -73,147 +73,112 @@ const FAQ = [
   },
 ];
 
-function FaqItem({ q, a }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-b border-fl-border last:border-0">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between py-5 text-left gap-4"
-      >
-        <span className="text-base font-sans font-medium text-fl-black">{q}</span>
-        <span className={`text-fl-muted text-xl transition-transform duration-200 shrink-0 ${open ? "rotate-45" : ""}`}>+</span>
-      </button>
-      <div
-        className="overflow-hidden transition-all duration-300"
-        style={{ maxHeight: open ? "200px" : "0px" }}
-      >
-        <p className="text-sm font-sans text-fl-muted leading-relaxed pb-5">{a}</p>
-      </div>
-    </div>
-  );
-}
 
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
 
   return (
-    <div className="min-h-screen bg-cream font-sans">
+    <div className="min-h-screen bg-base-100">
       <Navbar />
 
-      {/* Header */}
-      <section className="px-6 md:px-12 pt-20 pb-12 text-center max-w-3xl mx-auto">
-        <h1 className="text-4xl md:text-5xl font-serif text-fl-black mb-4">Simple, honest pricing</h1>
-        <p className="text-base text-fl-muted font-sans mb-8">
-          Start free. Upgrade when you're ready.
-        </p>
+      <section className="page py-16 sm:py-20">
+        <div className="mx-auto max-w-2xl text-center animate-fade-up">
+          <h1 className="text-3xl sm:text-4xl">Simple pricing</h1>
+          <p className="mt-3 text-base-content/60">
+            Start free. Upgrade when your library outgrows it.
+          </p>
 
-        {/* Toggle */}
-        <div className="inline-flex items-center gap-3 bg-fl-card border border-fl-border rounded-full px-2 py-1.5">
-          <button
-            onClick={() => setYearly(false)}
-            className={`px-4 py-1.5 rounded-full text-sm font-sans font-semibold transition-all ${
-              !yearly ? "bg-fl-yellow text-fl-black" : "text-fl-muted hover:text-fl-black"
-            }`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setYearly(true)}
-            className={`px-4 py-1.5 rounded-full text-sm font-sans font-semibold transition-all ${
-              yearly ? "bg-fl-yellow text-fl-black" : "text-fl-muted hover:text-fl-black"
-            }`}
-          >
-            Yearly
-            <span className="ml-1.5 text-[10px] font-sans font-semibold text-fl-black bg-fl-yellow/60 rounded-full px-1.5 py-0.5">
-              Save 20%
+          {/* Billing toggle. A label wrapping the input so the whole control is
+              clickable and the checkbox stays the accessible element. */}
+          <label className="mt-8 inline-flex cursor-pointer items-center gap-3">
+            <span className={`text-sm ${yearly ? "text-base-content/50" : "font-medium"}`}>
+              Monthly
             </span>
-          </button>
+            <input
+              type="checkbox"
+              className="toggle toggle-primary toggle-sm"
+              checked={yearly}
+              onChange={(e) => setYearly(e.target.checked)}
+            />
+            <span className={`text-sm ${yearly ? "font-medium" : "text-base-content/50"}`}>
+              Yearly
+            </span>
+            <span className="badge badge-primary badge-sm font-medium">Save 20%</span>
+          </label>
         </div>
-      </section>
 
-      {/* Plan cards */}
-      <section className="px-6 md:px-12 pb-20">
-        <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-5 items-start">
+        <div className="stagger mt-12 grid items-start gap-5 lg:grid-cols-3">
           {PLANS.map((plan) => {
             const price = yearly ? plan.yearlyPrice : plan.monthlyPrice;
             return (
               <div
                 key={plan.name}
-                className={`rounded-2xl border p-7 flex flex-col ${
+                className={`animate-fade-up rounded-xl p-6 opacity-0 ${
                   plan.elevated
-                    ? "bg-fl-black border-fl-black shadow-xl scale-[1.02] md:scale-105"
-                    : "bg-fl-card border-fl-border"
+                    ? "border-2 border-primary bg-base-100 shadow-lift"
+                    : "surface"
                 }`}
-                style={plan.elevated ? { boxShadow: "0 12px 40px rgba(40,40,40,0.18)" } : { boxShadow: "0 2px 8px rgba(40,40,40,0.04)" }}
               >
-                {plan.elevated && (
-                  <span className="inline-block mb-4 px-3 py-1 rounded-full bg-fl-yellow text-fl-black text-[11px] font-sans font-semibold uppercase tracking-wider self-start">
-                    Most popular
-                  </span>
-                )}
-                <h2 className={`text-xl font-serif mb-1 ${plan.elevated ? "text-cream" : "text-fl-black"}`}>{plan.name}</h2>
-                <p className={`text-sm font-sans mb-5 ${plan.elevated ? "text-cream/60" : "text-fl-muted"}`}>{plan.description}</p>
-
-                <div className="mb-6">
-                  <span className={`text-4xl font-serif ${plan.elevated ? "text-cream" : "text-fl-black"}`}>
-                    {price === 0 ? "Free" : `$${price}`}
-                  </span>
-                  {price > 0 && (
-                    <span className={`text-sm font-sans ml-1 ${plan.elevated ? "text-cream/50" : "text-fl-muted"}`}>
-                      / mo{yearly ? ", billed yearly" : ""}
+                <div className="flex items-baseline justify-between">
+                  <h2 className="text-lg">{plan.name}</h2>
+                  {plan.elevated && (
+                    <span className="badge badge-primary badge-sm font-medium">
+                      Most popular
                     </span>
                   )}
                 </div>
 
-                <ul className="space-y-2.5 flex-1 mb-7">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5">
-                      <span className={`mt-0.5 text-sm ${plan.elevated ? "text-fl-yellow" : "text-fl-green"}`}>✓</span>
-                      <span className={`text-sm font-sans ${plan.elevated ? "text-cream/80" : "text-fl-black"}`}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
+                <p className="mt-1 text-sm text-base-content/60">{plan.description}</p>
+
+                <p className="mt-5 flex items-baseline gap-1">
+                  <span className="text-4xl font-semibold tracking-tight">${price}</span>
+                  <span className="text-sm text-base-content/50">
+                    {price === 0 ? "forever" : "/ month"}
+                  </span>
+                </p>
+                {yearly && price > 0 && (
+                  <p className="mt-1 text-xs text-base-content/50">billed annually</p>
+                )}
 
                 <Link
                   to={plan.ctaLink}
-                  className={`btn-press text-center py-2.5 rounded-lg text-sm font-sans font-semibold transition-colors ${
-                    plan.elevated
-                      ? "bg-fl-yellow text-fl-black hover:bg-fl-yellow-h"
-                      : "border border-fl-black text-fl-black hover:bg-fl-black hover:text-cream"
-                  }`}
+                  className={`btn mt-6 w-full ${plan.elevated ? "btn-primary" : "btn-outline"}`}
                 >
                   {plan.cta}
                 </Link>
+
+                <ul className="mt-6 space-y-2.5">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-sm">
+                      <span className="mt-0.5 text-primary" aria-hidden="true">✓</span>
+                      <span className="text-base-content/70">{f}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             );
           })}
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="px-6 md:px-12 py-16 border-t border-fl-border">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-3xl font-serif text-fl-black mb-10">Frequently asked questions</h2>
-          {FAQ.map((item) => (
-            <FaqItem key={item.q} q={item.q} a={item.a} />
-          ))}
-        </div>
-      </section>
+      <section className="border-t border-base-300 bg-base-200/40">
+        <div className="page py-16">
+          <h2 className="text-2xl">Questions</h2>
 
-      {/* CTA banner */}
-      <section className="mx-6 md:mx-12 my-16 rounded-2xl bg-fl-yellow px-10 py-12 flex flex-col md:flex-row items-center justify-between gap-6">
-        <div>
-          <h2 className="text-3xl font-serif text-fl-black mb-1">Start studying today.</h2>
-          <p className="text-sm font-sans text-fl-black/60">No credit card required. Cancel anytime.</p>
+          <div className="mt-6 max-w-2xl space-y-2">
+            {FAQ.map((item) => (
+              // DaisyUI's collapse handles the open/closed state itself, so the
+              // page no longer needs a component and a piece of state per row.
+              <div key={item.q} className="collapse collapse-arrow surface">
+                <input type="checkbox" />
+                <div className="collapse-title text-sm font-medium">{item.q}</div>
+                <div className="collapse-content">
+                  <p className="text-sm leading-relaxed text-base-content/60">{item.a}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <Link
-          to="/register"
-          className="btn-press flex-shrink-0 px-6 py-3 text-[15px] font-sans font-semibold rounded-lg hover:opacity-90 transition-opacity"
-          style={{ backgroundColor: "#282828", color: "#f8f3ec" }}
-        >
-          Get started free →
-        </Link>
       </section>
 
       <Footer />

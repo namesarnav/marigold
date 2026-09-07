@@ -3,22 +3,27 @@ module.exports = {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
-      colors: {
-        cream:           "#f8f3ec",
-        "fl-black":      "#282828",
-        "fl-yellow":     "#ffe459",
-        "fl-yellow-h":   "#f5d800",
-        "fl-card":       "#ffffff",
-        "fl-border":     "#e8e1d6",
-        "fl-muted":      "#9a9080",
-        "fl-red":        "#e05c5c",
-        "fl-green":      "#4caf87",
-      },
       fontFamily: {
-        serif: ["Instrument Serif", "Georgia", "serif"],
-        sans:  ["Instrument Sans", "sans-serif"],
+        // One typeface throughout. The previous design paired a serif for
+        // headings with a sans for everything else; a single family with real
+        // weight contrast is quieter and reads as more deliberate at this size.
+        sans: ["Instrument Sans", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
+      // Softer than DaisyUI's defaults, applied through the theme tokens below
+      // so components pick them up without per-element overrides.
+      boxShadow: {
+        subtle: "0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 8px rgba(15, 23, 42, 0.04)",
+        lift: "0 4px 16px rgba(15, 23, 42, 0.08)",
       },
     },
   },
-  plugins: [],
+  plugins: [require("daisyui")],
+  daisyui: {
+    // Winter only, and light only. `darkTheme: false` stops DaisyUI emitting a
+    // prefers-color-scheme block that would otherwise repaint half the app dark
+    // on a machine set to dark mode, against a light palette we never tested.
+    themes: ["winter"],
+    darkTheme: false,
+    logs: false,
+  },
 };

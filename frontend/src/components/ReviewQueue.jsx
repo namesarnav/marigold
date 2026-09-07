@@ -12,25 +12,24 @@ import { getReviewQueue } from "../api.js";
 function band(concept) {
   const { p_correct: pCorrect, days_since_last_review: days } = concept;
 
-  if (pCorrect == null) return { label: "Unranked", tone: "muted" };
+  if (pCorrect == null) return { label: "Unranked", tone: "neutral" };
 
   // Never practised is a different state, not a weak score. It lands near the
   // population prior — mid-range — and calling that "getting shaky" describes
   // forgetting that cannot have happened. The distinction also matters because
-  // a long-forgotten concept scores *below* a new one, so without this the two
-  // would be presented as the same kind of thing.
-  if (days == null) return { label: "Not started", tone: "muted" };
+  // a long-forgotten concept scores *below* a new one.
+  if (days == null) return { label: "Not started", tone: "neutral" };
 
-  if (pCorrect < 0.35) return { label: "Review now", tone: "red" };
-  if (pCorrect < 0.55) return { label: "Getting shaky", tone: "amber" };
-  return { label: "Holding up", tone: "green" };
+  if (pCorrect < 0.35) return { label: "Review now", tone: "error" };
+  if (pCorrect < 0.55) return { label: "Getting shaky", tone: "warning" };
+  return { label: "Holding up", tone: "success" };
 }
 
 const TONE = {
-  red: { text: "text-fl-red", bar: "bg-fl-red", chip: "bg-fl-red/10 text-fl-red" },
-  amber: { text: "text-[#c98a2e]", bar: "bg-[#e0a640]", chip: "bg-[#e0a640]/12 text-[#c98a2e]" },
-  green: { text: "text-fl-green", bar: "bg-fl-green", chip: "bg-fl-green/10 text-fl-green" },
-  muted: { text: "text-fl-muted", bar: "bg-fl-muted", chip: "bg-fl-muted/10 text-fl-muted" },
+  error: { badge: "badge-error", progress: "progress-error", text: "text-error" },
+  warning: { badge: "badge-warning", progress: "progress-warning", text: "text-warning" },
+  success: { badge: "badge-success", progress: "progress-success", text: "text-success" },
+  neutral: { badge: "badge-ghost", progress: "", text: "text-base-content/50" },
 };
 
 /** How long ago, in words. `null` means never practised. */
@@ -40,8 +39,7 @@ function lastSeen(days) {
   if (days < 2) return "Studied yesterday";
   if (days < 30) return `Studied ${Math.round(days)} days ago`;
   // floor, not round: at 45 days "2 months ago" overstates it, and overstating
-  // how long ago something was studied makes the queue look more alarming than
-  // the data supports.
+  // staleness makes the queue look more alarming than the data supports.
   const months = Math.max(1, Math.floor(days / 30));
   return `Studied ${months} month${months === 1 ? "" : "s"} ago`;
 }
@@ -49,12 +47,8 @@ function lastSeen(days) {
 /**
  * What the estimate is based on, in the user's terms rather than the model's.
  *
- * `source` comes straight from the ranker: "prior" means there was too little
- * history for the sequence model and a population average was used, "sakt" and
- * "blend" mean the trained model contributed, and "unavailable" means the model
- * could not be loaded and the order is a least-practised fallback rather than a
- * forgetting estimate. Saying so matters — a confident-looking list that is
- * secretly just "least practised" would be misleading.
+ * `source` comes straight from the ranker. Saying so matters — a
+ * confident-looking list that is secretly just "least practised" would mislead.
  */
 function basis(source) {
   switch (source) {
@@ -105,63 +99,69 @@ export default function ReviewQueue() {
 
   return (
     <div>
-      <h2 className="text-2xl font-serif text-fl-black mb-1">What to review.</h2>
-      <p className="text-sm text-fl-muted font-sans mb-6">
-        Your concepts, ranked by how likely you are to have forgotten them.
-      </p>
+      <div className="mb-5">
+        <h1 className="text-2xl">What to review</h1>
+        <p className="mt-1 text-sm text-base-content/60">
+          Your concepts, ranked by how likely you are to have forgotten them.
+        </p>
+      </div>
 
       {/* Projection. The forgetting curve is time-based, so "what will I have
           lost by my exam" is a real query the backend already answers. */}
-      <div className="flex items-center gap-2 mb-6">
-        {HORIZONS.map((h) => (
-          <button
-            key={h.id}
-            onClick={() => setHorizon(h.id)}
-            className={`btn-press px-3 py-1.5 rounded-lg text-xs font-sans font-semibold transition-colors ${
-              horizon === h.id
-                ? "bg-fl-yellow text-fl-black"
-                : "bg-fl-card border border-fl-border text-fl-muted hover:text-fl-black hover:border-fl-black"
-            }`}
-          >
-            {h.label}
-          </button>
-        ))}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div role="tablist" className="join">
+          {HORIZONS.map((h) => (
+            <button
+              key={h.id}
+              role="tab"
+              onClick={() => setHorizon(h.id)}
+              className={`btn join-item btn-sm ${
+                horizon === h.id ? "btn-primary" : "btn-outline"
+              }`}
+            >
+              {h.label}
+            </button>
+          ))}
+        </div>
         {horizon !== "now" && (
-          <span className="text-xs font-sans text-fl-muted ml-1">
+          <span className="text-xs text-base-content/50">
             projected — assumes you don't study in between
           </span>
         )}
       </div>
 
       {loading && (
-        <div className="flex items-center gap-3 text-sm text-fl-muted font-sans">
-          <span className="h-4 w-4 border-2 border-fl-black border-t-transparent rounded-full animate-spin" />
-          Working out what you're forgetting…
+        <div className="flex justify-center py-12">
+          <span className="loading loading-spinner loading-md text-primary" />
         </div>
       )}
 
       {!loading && error && (
-        <p className="text-sm font-sans text-fl-red">{error}</p>
+        <div role="alert" className="alert alert-error">
+          <span className="text-sm">{error}</span>
+        </div>
       )}
 
       {!loading && !error && concepts.length === 0 && (
-        <div className="text-center py-12 border border-dashed border-fl-border rounded-xl">
-          <p className="text-2xl font-serif text-fl-black mb-2">Nothing to review yet.</p>
-          <p className="text-sm text-fl-muted font-sans">
-            Upload a PDF and study a few cards. Concepts show up here<br />
-            as soon as there's something to track.
+        <div className="rounded-xl border border-dashed border-base-300 py-12 text-center">
+          <p className="text-3xl" aria-hidden="true">🎯</p>
+          <h2 className="mt-3 text-lg">Nothing to review yet</h2>
+          <p className="mt-1 text-sm text-base-content/60">
+            Upload a PDF and study a few cards. Concepts show up here as soon as
+            there's something to track.
           </p>
         </div>
       )}
 
       {!loading && !error && degraded && (
         // The backend degrades rather than failing when the model is
-        // unavailable. Saying so is the honest thing: the order is still
-        // useful, it is just not a forgetting estimate.
-        <p className="mb-4 text-xs font-sans text-fl-muted border-l-4 border-fl-border bg-fl-card rounded-r-lg px-4 py-3">
-          Scoring is unavailable right now, so these are ordered by how little
-          you've practised them.
-        </p>
+        // unavailable. Saying so is the honest thing.
+        <div role="status" className="alert mb-4 py-2.5">
+          <span className="text-sm">
+            Scoring is unavailable right now, so these are ordered by how little
+            you've practised them.
+          </span>
+        </div>
       )}
 
       <div className="space-y-2">
@@ -169,29 +169,21 @@ export default function ReviewQueue() {
           const { label: bandLabel, tone: toneName } = band(c);
           const tone = TONE[toneName];
           const deck = c.documents?.[0];
+
           return (
-            <div
-              key={c.concept_id}
-              className="bg-fl-card border border-fl-border rounded-xl px-5 py-4 card-hover"
-              style={{ boxShadow: "0 2px 8px rgba(40,40,40,0.04)" }}
-            >
+            <div key={c.concept_id} className="surface p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-sans font-medium text-fl-black truncate">
-                      {c.label}
-                    </p>
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-sans font-semibold uppercase tracking-wide ${tone.chip}`}
-                    >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-medium">{c.label}</p>
+                    <span className={`badge badge-sm ${tone.badge} font-medium`}>
                       {bandLabel}
                     </span>
                   </div>
 
-                  <p className="text-xs font-sans text-fl-muted mt-1">
-                    {lastSeen(c.days_since_last_review)}
-                    {" · "}
-                    {c.card_count} card{c.card_count === 1 ? "" : "s"}
+                  <p className="mt-1 text-xs text-base-content/50">
+                    {lastSeen(c.days_since_last_review)} · {c.card_count} card
+                    {c.card_count === 1 ? "" : "s"}
                     {c.interaction_count > 0 && ` · ${c.interaction_count} attempts`}
                   </p>
 
@@ -199,22 +191,19 @@ export default function ReviewQueue() {
                     <div className="mt-2.5 flex items-center gap-2">
                       {/* Recall, not risk: a longer bar reads as "you still
                           have this", which is the direction people expect. */}
-                      <div className="h-1.5 flex-1 max-w-[180px] bg-fl-border rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${tone.bar}`}
-                          style={{ width: `${Math.round(c.p_correct * 100)}%` }}
-                        />
-                      </div>
-                      <span className={`text-[11px] font-sans font-medium ${tone.text}`}>
+                      <progress
+                        className={`progress w-40 ${tone.progress}`}
+                        value={Math.round(c.p_correct * 100)}
+                        max="100"
+                      />
+                      <span className={`text-xs font-medium tabular-nums ${tone.text}`}>
                         {Math.round(c.p_correct * 100)}%
                         {c.days_since_last_review == null ? " expected" : " recall"}
                       </span>
                     </div>
                   )}
 
-                  <p className="text-[11px] font-sans text-fl-muted mt-1.5">
-                    {basis(c.source)}
-                  </p>
+                  <p className="mt-1.5 text-xs text-base-content/40">{basis(c.source)}</p>
                 </div>
 
                 {deck && (
@@ -225,7 +214,7 @@ export default function ReviewQueue() {
                         ? `In ${c.documents.length} decks — opening ${deck.filename}`
                         : deck.filename
                     }
-                    className="btn-press shrink-0 px-3 py-1.5 rounded-lg bg-fl-yellow hover:bg-fl-yellow-h text-fl-black text-xs font-sans font-semibold transition-colors"
+                    className="btn btn-primary btn-sm shrink-0"
                   >
                     Study
                   </button>
@@ -237,10 +226,9 @@ export default function ReviewQueue() {
       </div>
 
       {!loading && concepts.length > 0 && !data?.model_available && (
-        // Deliberately understated. The prior path is the correct behaviour
-        // until a model is trained on real data, not a broken state — but a
-        // user comparing this to "personalised" claims deserves the truth.
-        <p className="mt-6 text-[11px] font-sans text-fl-muted">
+        // Deliberately understated. The prior path is correct behaviour until a
+        // model is trained on real data, not a broken state.
+        <p className="mt-6 text-xs text-base-content/40">
           Rankings currently use typical concept difficulty and how long it's
           been since you studied. They'll get more personal as you build up
           answer history.
