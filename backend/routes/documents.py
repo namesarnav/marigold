@@ -26,10 +26,33 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
+# Postgres rejects NUL in text columns outright: "PostgreSQL text fields cannot
+# contain NUL (0x00) bytes". Real PDFs do contain them — broken embedded fonts
+# and odd encodings both produce NUL in extracted text — so an upload of a
+# perfectly readable document failed at the INSERT with a 500, and, because the
+# server tore the connection down mid-body, the browser reported it as the far
+# less helpful "Failed to fetch".
+#
+# SQLite stores NUL happily, which is why the test suite never saw this: the
+# default test database accepts the very bytes production refuses.
+_NUL = "\x00"
+
+
+def _strip_nul(text: str) -> str:
+    """Remove NUL bytes from extracted text.
+
+    Dropped rather than replaced. A NUL in a PDF text layer carries no meaning —
+    it is an artefact of the encoding, not a character the author wrote — so
+    substituting a space or U+FFFD would insert content that was never there,
+    into the text a language model then reads.
+    """
+    return text.replace(_NUL, "") if _NUL in text else text
+
+
 def _extract_text(file_bytes: bytes) -> tuple[str, int]:
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     pages = [page.get_text() for page in doc]
-    full_text = "\n".join(pages).strip()
+    full_text = _strip_nul("\n".join(pages)).strip()
     return full_text, len(pages)
 
 

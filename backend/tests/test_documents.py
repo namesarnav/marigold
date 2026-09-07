@@ -181,3 +181,80 @@ def test_other_user_cannot_access_document(client, minimal_pdf):
 
     # User 2 cannot see user 1's document
     assert client.get(f"/api/documents/{doc_id}", headers=h2).status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# NUL bytes in extracted text
+# ---------------------------------------------------------------------------
+#
+# Postgres refuses NUL in a text column; SQLite stores it happily. The default
+# test database is SQLite, so asserting "the insert succeeded" would pass even
+# with the bug present. These assert on the *content* instead, which is the
+# property that actually has to hold on both engines.
+
+def test_strip_nul_removes_nul_bytes():
+    from backend.routes.documents import _strip_nul
+
+    assert _strip_nul("before\x00after") == "beforeafter"
+
+
+def test_strip_nul_drops_rather_than_substitutes():
+    """A NUL is an encoding artefact, not a character the author wrote.
+
+    Replacing it with a space or U+FFFD would inject content that was never in
+    the document, into the text the card generator then reads.
+    """
+    from backend.routes.documents import _strip_nul
+
+    assert _strip_nul("a\x00\x00b") == "ab"
+    assert "�" not in _strip_nul("a\x00b")
+
+
+def test_strip_nul_leaves_ordinary_text_alone():
+    from backend.routes.documents import _strip_nul
+
+    text = "Photosynthesis converts light energy.\nNewline and\ttab are fine."
+    assert _strip_nul(text) == text
+
+
+def test_extracted_text_never_contains_nul(minimal_pdf):
+    from backend.routes.documents import _extract_text
+
+    text, pages = _extract_text(minimal_pdf)
+
+    assert "\x00" not in text
+    assert pages == 1
+
+
+def test_uploading_a_pdf_stores_text_without_nul(client, auth_headers, minimal_pdf, monkeypatch):
+    """The end-to-end property, asserted on what was stored.
+
+    A real 111-page PDF produced NUL in its text layer and failed the INSERT on
+    Postgres with a 500 — which reached the browser as "Failed to fetch",
+    because the connection was torn down mid-upload.
+    """
+    from backend.routes import documents as documents_module
+
+    real_extract = documents_module._extract_text
+
+    def extract_with_nul(file_bytes):
+        # Simulate the broken font encoding that produces NUL, upstream of the
+        # strip, so the whole path is exercised rather than just the helper.
+        text, pages = real_extract(file_bytes)
+        return documents_module._strip_nul("Chapter\x00 One\x00" + text), pages
+
+    monkeypatch.setattr(documents_module, "_extract_text", extract_with_nul)
+
+    doc_id = upload_doc(client, auth_headers, minimal_pdf)
+
+    from backend.models import Document
+    from conftest import _TestSession
+
+    session = _TestSession()
+    try:
+        stored = session.query(Document).filter(Document.id == doc_id).first()
+        assert stored is not None
+        assert "\x00" not in stored.extracted_text
+        assert "Chapter One" in stored.extracted_text
+    finally:
+        session.close()
