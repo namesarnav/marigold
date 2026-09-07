@@ -86,7 +86,18 @@ async def regenerate_flashcards(
     if not doc.extracted_text:
         raise HTTPException(status_code=400, detail="No stored text for this document. Re-upload the PDF.")
 
-    db.query(Flashcard).filter(Flashcard.doc_id == doc_id).delete()
+    # Deleted one at a time through the ORM, not with a bulk
+    # `query(...).delete()`. The bulk form emits a single raw SQL DELETE and
+    # skips ORM cascades entirely, so `Flashcard.quiz_answers`
+    # (cascade="all, delete-orphan") never ran and any card that had been
+    # answered in a quiz tripped quiz_answers_flashcard_id_fkey — regenerating
+    # worked right up until the user had taken a quiz on the document.
+    #
+    # Interaction rows are deliberately not cascaded: that FK is ON DELETE SET
+    # NULL, so the attempt history the scheduler is built on survives its card.
+    for card in db.query(Flashcard).filter(Flashcard.doc_id == doc_id).all():
+        db.delete(card)
+
     doc.status = "processing"
     db.commit()
 

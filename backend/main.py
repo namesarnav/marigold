@@ -1,11 +1,12 @@
 import logging
 import os
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -58,6 +59,41 @@ app.add_middleware(
     https_only=settings.cookie_secure,
     same_site="lax",
 )
+
+
+@app.exception_handler(SQLAlchemyError)
+def handle_database_error(request: Request, exc: SQLAlchemyError):
+    """Turn an unhandled database error into a 500 the browser can actually read.
+
+    Registered as a handler for a specific exception class, which is what makes
+    this work: FastAPI routes handlers for `Exception`/500 to
+    ServerErrorMiddleware, the outermost layer of the stack — *outside*
+    CORSMiddleware. A 500 from there carries no Access-Control-Allow-Origin, so
+    a cross-origin caller never sees the response at all; fetch rejects with
+    "Failed to fetch" and the real error is visible only in the server log.
+
+    That is not hypothetical. Regenerating a document's cards after taking a
+    quiz on it raised a ForeignKeyViolation, and the entire symptom reaching the
+    user was "failed to fetch" — no status, no message, nothing to search for.
+    Handlers for a named class are held by ExceptionMiddleware instead, which
+    sits inside the user middleware, so this response passes back out through
+    CORS and arrives as a readable 500.
+
+    It matters in development, where the Vite server on :5173 is a different
+    origin from the API on :8000. In production both are the same origin and the
+    500 would have been legible either way — so the mode that hides the error is
+    exactly the one used for debugging.
+
+    The detail is deliberately generic: the exception text contains table and
+    constraint names. The traceback goes to the log.
+    """
+    logging.getLogger(__name__).exception(
+        "database error handling %s %s", request.method, request.url.path
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "A database error occurred. Please try again."},
+    )
 
 
 @app.get("/healthz", tags=["ops"])
