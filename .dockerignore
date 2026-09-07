@@ -5,10 +5,24 @@
 frontend/node_modules
 frontend/dist
 
-# Not part of the app image: the ML pipeline is a separate concern, nothing in
-# the API imports it, and it pulls in PyTorch. Sending it to the builder would
-# add hundreds of megabytes to the context for no runtime benefit.
-ml/
+# The API imports ml/ for the review queue (backend/review.py), so the library
+# itself ships. Its heavy imports are lazy, so this adds no dependency to
+# backend/requirements.txt — the cold-start prior is pure Python.
+#
+# Two things are excluded on purpose:
+#
+#  - ml/artifacts/ is the ASSISTments checkpoint. Its skill ids are that
+#    dataset's, not any Marigold user's, so `concept_to_skill` is empty and the
+#    SAKT path returns nothing regardless. Shipping it would make the loader
+#    import PyTorch at first request — ~2GB in the image — to produce exactly
+#    the prior-path answers it produces without it. It belongs here once a model
+#    is trained on Marigold's own data, together with torch in requirements.
+#  - ml/data/ is the training corpus and its loaders; nothing at request time
+#    reads them.
+ml/artifacts/
+ml/data/raw/
+ml/training/
+ml/tests/
 .github/
 .git/
 # Agent worktrees: a second checkout of this repo, hundreds of megabytes of

@@ -39,10 +39,16 @@ import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple
-
-import numpy as np
-import torch
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from ml.config import (
     ARTIFACTS_DIR,
@@ -53,9 +59,25 @@ from ml.config import (
     ForgettingConfig,
     SAKTConfig,
 )
-from ml.data.sequences import PAD_ID, encode_interaction
 from ml.models.coldstart import ConceptPrior, blend, should_use_sakt
-from ml.models.sakt import SAKTModel
+
+# torch, numpy and SAKTModel are imported lazily, inside the two places that
+# actually need them: `from_artifacts` (only when a checkpoint exists on disk)
+# and `_sakt_predictions` (only when a model is loaded and the concepts map to
+# skills it knows).
+#
+# The reason is deployment, not startup time. Until a model is trained on
+# Marigold's own concepts every user is served by the cold-start prior, which is
+# arithmetic on a Beta posterior and needs neither library — but a module-level
+# `import torch` would still force ~2GB of PyTorch into the API image to run it.
+# Keeping them lazy lets the backend ship the prior path alone and pick the
+# SAKT dependencies up later, when there is a model that justifies them.
+#
+# TYPE_CHECKING rather than a runtime import for the annotation: this module is
+# `from __future__ import annotations`, so every annotation is a string and is
+# never evaluated at import.
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ml.models.sakt import SAKTModel
 
 
 class HistoryUnavailable(RuntimeError):
@@ -182,6 +204,12 @@ class ForgettingRanker:
         if checkpoint_path is None:
             checkpoint_path = ARTIFACTS_DIR / "sakt_assistments09.pt"
         if Path(checkpoint_path).exists():
+            # Only reached when there is a checkpoint to load, so a deployment
+            # without one never imports torch at all.
+            import torch
+
+            from ml.models.sakt import SAKTModel
+
             payload = torch.load(checkpoint_path, map_location=device, weights_only=False)
             config = SAKTConfig(**payload["config"]) if "config" in payload else SAKT
             model = SAKTModel(payload["n_skills"], config)
@@ -214,6 +242,15 @@ class ForgettingRanker:
         """
         if self.model is None or not self.concept_to_skill:
             return {}
+
+        # Guarded above: a model can only be present if `from_artifacts`
+        # already imported these successfully. `ml.data.sequences` is in here
+        # for the same reason — it pulls in torch.utils.data at import, so a
+        # module-level import of PAD_ID would undo the whole arrangement.
+        import numpy as np
+        import torch
+
+        from ml.data.sequences import PAD_ID, encode_interaction
 
         mapped = [c for c in candidates if c in self.concept_to_skill]
         if not mapped:

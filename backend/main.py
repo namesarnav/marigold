@@ -11,7 +11,16 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_settings
 from .database import get_db
-from .routes import auth, documents, flashcards, interactions, oauth_routes, quiz, stats
+from .routes import (
+    auth,
+    documents,
+    flashcards,
+    interactions,
+    oauth_routes,
+    quiz,
+    review,
+    stats,
+)
 
 settings = get_settings()
 
@@ -70,6 +79,7 @@ app.include_router(flashcards.router)
 app.include_router(quiz.router)
 app.include_router(stats.router)
 app.include_router(interactions.router)
+app.include_router(review.router)
 
 # --- The built frontend ------------------------------------------------------
 #

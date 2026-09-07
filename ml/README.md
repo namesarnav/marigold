@@ -258,10 +258,26 @@ For Postgres, `embedding` should become pgvector's `vector(384)`. That needs the
 extension installed on the in-cluster Postgres — a real migration, not a column
 type swap.
 
+## Wired into the product
+
+`GET /api/review/next` serves this library through `backend/review.py`, which is
+the only module in the backend that imports `ml/`. It passes history explicitly,
+so the `history_provider` path is never used and `HistoryUnavailable` cannot be
+reached from the app.
+
+**The serving image has no PyTorch.** `predict.py` imports torch, numpy and
+`ml.data.sequences` lazily — inside `from_artifacts` (only when a checkpoint
+exists) and `_sakt_predictions` (only when a model is loaded). Since no
+Marigold-trained checkpoint ships, every concept takes the prior path, which is
+pure Python. `ml/tests/test_serving_deps.py` runs the import in a subprocess
+with torch and numpy blocked so a stray module-level import cannot quietly
+reintroduce a 2GB dependency.
+
 ## Not built yet
 
-- **No FastAPI service.** `ml/` is a library; nothing is exposed over HTTP. The
-  serving deps are pinned in `requirements.txt` but unused.
+- **No FastAPI service.** `ml/` is a library; nothing is exposed over HTTP from
+  here — the backend calls it in-process. The serving deps pinned in
+  `requirements.txt` remain unused.
 - **No Marigold-trained model.** The checkpoint is ASSISTments-only. Marigold's
   own concepts need `concept_to_skill` populated and a training run on real
   interaction data; until then every user takes the prior path, correctly.

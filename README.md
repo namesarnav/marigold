@@ -13,7 +13,7 @@ concepts by how likely you are to have forgotten them.
 | --- | --- |
 | `backend/` | FastAPI: auth, PDF ingest, card generation, quizzes, the interaction log |
 | `frontend/` | React + Vite + Tailwind |
-| `ml/` | Knowledge tracing (SAKT) and concept clustering. A library — the API does not import it yet |
+| `ml/` | Knowledge tracing (SAKT) and concept clustering. Reached from the API through `backend/review.py` |
 
 ## Stack
 
@@ -176,12 +176,31 @@ Main routes:
 | `POST /api/flashcards/{card_id}/review` | Record a study attempt |
 | `POST /api/quiz/start`, `/{id}/answer`, `/{id}/results` | Quizzes |
 | `GET /api/interactions/me` | The raw attempt log |
+| `GET /api/review/next` | Concepts ranked by forgetting risk; `as_of` projects forward |
 | `GET /healthz` | Liveness and readiness; touches the database |
 
 ## Status
 
 Working: accounts and OAuth, PDF upload with background card generation,
-flashcards, quizzes, stats, and the interaction log. The ML pipeline is
-validated against ASSISTments 2009 (held-out AUC 0.7535) but is **not yet wired
-into the product** — there is no scheduling endpoint, and nothing imports `ml/`.
-That is the next piece of work.
+flashcards, quizzes, stats, the interaction log, and a review queue that ranks
+concepts by forgetting risk.
+
+The ML pipeline is validated against ASSISTments 2009 (held-out AUC 0.7535) and
+`GET /api/review/next` now serves from it — but **only the cold-start half**.
+The SAKT checkpoint's skill ids belong to ASSISTments, not to any user's
+concepts, so `concept_to_skill` is empty and every concept is scored by the
+population prior plus the forgetting decay. That is the correct behaviour, not a
+fallback: the sequence model has nothing to say until it is trained on real
+Marigold interactions.
+
+Because of that the API image ships `ml/` **without PyTorch** — the prior path
+is pure Python, and `ml/inference/predict.py` imports torch and numpy lazily so
+the ~2GB dependency is not paid for a code path that cannot run yet. Turning the
+SAKT path on later means: export the interaction log, populate
+`concept_to_skill`, train, ship the checkpoint, and add torch to
+`backend/requirements.txt`. No application code has to change.
+
+One ordering consequence is a deliberate product choice worth revisiting: a
+concept studied once and long forgotten ranks *above* one never studied, because
+its estimate has decayed below the prior. `source` and `interaction_count` on
+each row are what a UI uses to tell those apart.

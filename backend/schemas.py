@@ -204,6 +204,44 @@ class ConceptOut(BaseModel):
     interaction_count: int
 
 
+class ReviewConceptOut(BaseModel):
+    """One concept in the review queue, with why it is placed there.
+
+    The provenance fields are not decoration. `source` says which estimator
+    produced the number — "prior" for a concept with too little history for the
+    sequence model, "sakt" for one the model knows, "blend" for the ramp between
+    them, and "unavailable" when the model could not be loaded at all and the
+    order is a least-practised fallback rather than a forgetting estimate. A UI
+    that shows a confidence, or explains a recommendation, needs to be able to
+    tell those apart; so does anyone debugging a queue that looks wrong.
+    """
+
+    concept_id: int
+    key: str
+    label: str
+    card_count: int
+    interaction_count: int
+
+    # None on the degraded path, where there is no estimate to report.
+    p_correct: Optional[float] = None
+    source: str
+    days_since_last_review: Optional[float] = None
+
+
+class ReviewQueueOut(BaseModel):
+    """Concepts ordered by forgetting risk, most at-risk first."""
+
+    # Echoed back because it may be a future date the caller chose, and the
+    # whole response is only meaningful relative to it.
+    as_of: str
+    count: int
+    # Whether a trained knowledge-tracing model contributed. False means every
+    # concept came from the cold-start prior, which is the honest state until a
+    # model is trained on real Marigold data.
+    model_available: bool
+    concepts: List[ReviewConceptOut]
+
+
 class InteractionOut(BaseModel):
     """One element of the knowledge-tracing input sequence."""
 

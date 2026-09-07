@@ -36,6 +36,11 @@ COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ ./backend/
+# The knowledge-tracing library behind /api/review/next. Its torch and numpy
+# imports are lazy and no checkpoint ships (see .dockerignore), so this adds
+# source files and nothing to requirements.txt — every concept is scored by the
+# cold-start prior, which is pure Python.
+COPY ml/ ./ml/
 # Alembic config and revisions ship in the image so the entrypoint can run
 # `alembic upgrade head` from this exact build — the schema and the code that
 # expects it are then always the same version.
