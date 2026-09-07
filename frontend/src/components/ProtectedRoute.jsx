@@ -1,5 +1,6 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import RouteSpinner from "./RouteSpinner.jsx";
 import VerifyEmailGate from "./VerifyEmailGate.jsx";
 
 /**
@@ -12,16 +13,14 @@ import VerifyEmailGate from "./VerifyEmailGate.jsx";
  */
 export default function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-base-100">
-        <span className="loading loading-spinner loading-lg text-primary" />
-      </div>
-    );
-  }
+  if (loading) return <RouteSpinner />;
 
-  if (!user) return <Navigate to="/login" replace />;
+  // Carry where they were trying to go. A shared link to /deck/12 otherwise
+  // costs two navigations: bounced to the form, then dropped on the dashboard
+  // with the deck they actually wanted nowhere in sight.
+  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
 
   // `verification_required` is the server telling us whether it is enforcing
   // the gate. Checking it keeps the two halves from disagreeing: with the gate

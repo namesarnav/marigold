@@ -41,6 +41,34 @@
   .surface {
     @apply rounded-xl border border-base-300 bg-base-100;
   }
+
+  /* A soft wash behind the hero so the card has something to sit on. A
+     gradient rather than an image: it scales to any viewport, costs no
+     request, and stays subtle enough not to compete with the headline.
+
+     This goes on a full-bleed wrapper, never on `.page`. Two reasons, both
+     learned the hard way: insetting it past a centred container's edges to
+     reach the viewport widened the document (a 390px screen scrolled to 469),
+     and clipping it to that container instead leaves a visible vertical cut
+     where the gradient stops mid-fade.
+
+     Paint order rather than a negative z-index: `z-index: -1` would drop this
+     behind the page wrapper's own bg-base-100 and disappear entirely. Both
+     this pseudo-element and the hero's content are positioned with auto
+     z-index instead, so they stack in DOM order and the wash lands between
+     the background and the copy. */
+  .hero-glow { position: relative; }
+
+  .hero-glow::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 480px;
+    pointer-events: none;
+    background:
+      radial-gradient(38rem 22rem at 78% 18%, oklch(var(--p) / 0.14), transparent 70%),
+      radial-gradient(30rem 20rem at 8% 0%, oklch(var(--s) / 0.10), transparent 70%);
+  }
 }
 
 /* --- Motion ---------------------------------------------------------------
@@ -65,6 +93,16 @@
 .animate-fade-up { animation: fadeUp 0.3s ease-out forwards; }
 .animate-fade-in { animation: fadeIn 0.25s ease-out forwards; }
 .animate-slide-in { animation: slideIn 0.2s ease-out forwards; }
+
+/* A slow idle drift, used only on the hero card. Six seconds and ten pixels:
+   enough that the page does not feel frozen, not enough to pull the eye off
+   the copy beside it. */
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+
+.animate-float { animation: floatSlow 6s ease-in-out infinite; }
 
 .stagger > *:nth-child(1) { animation-delay: 0ms; }
 .stagger > *:nth-child(2) { animation-delay: 50ms; }

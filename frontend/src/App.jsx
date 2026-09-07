@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { ToastProvider } from "./toast.jsx";
+import GuestRoute from "./components/GuestRoute.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import Landing from "./pages/Landing.jsx";
 import Login from "./pages/Login.jsx";
@@ -14,27 +15,54 @@ import VerifyEmail from "./pages/VerifyEmail.jsx";
 import OAuthCallback from "./pages/OAuthCallback.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
+import NotFound from "./pages/NotFound.jsx";
 
+/**
+ * Every route falls into one of three groups, and the wrapper says which.
+ *
+ *   public      — renders the same signed in or out.
+ *   GuestRoute  — signed-out only; a signed-in visitor is sent onward.
+ *   Protected   — signed-in and verified only; anyone else is sent to sign in,
+ *                 with the destination carried along so they arrive here after.
+ *
+ * Nothing is left to a page to enforce for itself. A page that checks its own
+ * session is a page that can be added later without the check.
+ */
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
           <Routes>
+            {/* --- Public ------------------------------------------------ */}
             <Route path="/" element={<Landing />} />
             <Route path="/pricing" element={<Pricing />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            {/* Both are landing points for a redirect from outside the SPA —
-                the emailed confirmation link, and the OAuth callback. Public,
-                because the whole point of each is to establish a session for
-                someone who does not have one yet. */}
+
+            {/* Landing points for a redirect from outside the SPA — the
+                emailed confirmation link, and the OAuth callback. Public
+                because each exists to establish a session for someone who
+                does not have one yet, and neither can be guest-gated: both
+                are reached part-way through acquiring the session that a
+                guest gate would then bounce. */}
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
+
             {/* Public for the same reason: someone who has forgotten their
-                password by definition cannot sign in first. */}
+                password by definition cannot sign in first. Left reachable
+                while signed in too — there is no in-app way to change a
+                password, so redirecting a signed-in user who followed their
+                own reset link would strand them. */}
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+
+            {/* --- Signed out only --------------------------------------- */}
+            <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
+            <Route
+              path="/register"
+              element={<GuestRoute><Register /></GuestRoute>}
+            />
+
+            {/* --- Signed in and verified -------------------------------- */}
             <Route
               path="/dashboard"
               element={<ProtectedRoute><Dashboard /></ProtectedRoute>}
@@ -51,7 +79,10 @@ export default function App() {
               path="/results/:id"
               element={<ProtectedRoute><ResultsPage /></ProtectedRoute>}
             />
-            <Route path="*" element={<Navigate to="/" replace />} />
+
+            {/* Rendered, not redirected, so the failing URL stays in the
+                address bar and can be reported. */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </ToastProvider>
       </AuthProvider>

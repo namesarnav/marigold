@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import Footer from "../components/Footer.jsx";
+import HeroDemo from "../components/HeroDemo.jsx";
 import Navbar from "../components/Navbar.jsx";
 
 const STEPS = [
@@ -38,11 +39,6 @@ const FEATURES = [
   },
 ];
 
-const SAMPLE_CARDS = [
-  { topic: "Biology", q: "What do mitochondria do?" },
-  { topic: "Biology", q: "Define osmosis" },
-  { topic: "Physics", q: "State Newton's second law" },
-];
 
 export default function Landing() {
   return (
@@ -50,43 +46,70 @@ export default function Landing() {
       <Navbar />
 
       {/* Hero */}
-      <section className="page pb-16 pt-20 sm:pt-28">
-        <div className="max-w-2xl animate-fade-up">
-          <span className="badge badge-ghost badge-sm mb-5 gap-1.5 font-medium">
-            <span aria-hidden="true">🌼</span> Spaced repetition, without the setup
-          </span>
+      {/* Full-bleed wrapper so the background wash can span the viewport; the
+          content stays in the usual centred `.page` column inside it. */}
+      <section className="hero-glow">
+        <div className="page pb-16 pt-20 sm:pt-28">
+          {/* Two columns from lg up: the pitch, and the thing itself running
+              beside it. Below that the card drops under the copy rather than
+              shrinking, because a flashcard narrower than its own question is
+              not a demonstration of anything.
 
-          <h1 className="text-4xl leading-[1.1] sm:text-5xl md:text-6xl">
-            Turn your notes into knowledge.
-          </h1>
+              The card track is a fixed 24rem, not `auto`. The card's faces are
+              absolutely positioned, so they contribute nothing to min-content
+              and an auto track collapses to the width of the progress dots —
+              which is exactly what it did. */}
+          <div className="relative grid items-center gap-14 lg:grid-cols-[minmax(0,1fr)_24rem]">
+            {/* Each element rises in just behind the one above it. The delays
+                are inline because they are positional, not reusable. */}
+            <div className="max-w-xl">
+              <span
+                className="badge badge-ghost badge-sm mb-5 animate-fade-up gap-1.5 font-medium opacity-0"
+                style={{ animationDelay: "0ms" }}
+              >
+                <span aria-hidden="true">🌼</span> Spaced repetition, without the setup
+              </span>
 
-          <p className="mt-5 max-w-lg text-base leading-relaxed text-base-content/70">
-            Upload a PDF and Marigold builds the flashcards and quizzes for you —
-            then keeps track of what you're forgetting, so revision starts with
-            whatever needs it most.
-          </p>
+              <h1
+                className="animate-fade-up text-4xl leading-[1.1] opacity-0 sm:text-5xl md:text-6xl"
+                style={{ animationDelay: "70ms" }}
+              >
+                Turn your notes into knowledge.
+              </h1>
 
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link to="/register" className="btn btn-primary">
-              Start studying free
-            </Link>
-            <Link to="/login" className="btn btn-ghost">
-              I have an account
-            </Link>
-          </div>
-        </div>
+              <p
+                className="mt-5 max-w-lg animate-fade-up text-base leading-relaxed text-base-content/70 opacity-0"
+                style={{ animationDelay: "140ms" }}
+              >
+                Upload a PDF and Marigold builds the flashcards and quizzes for
+                you — then keeps track of what you're forgetting, so revision
+                starts with whatever needs it most.
+              </p>
 
-        {/* A glance at the product rather than a stock illustration. */}
-        <div
-          className="mt-14 grid max-w-2xl gap-3 sm:grid-cols-3"
-          style={{ animationDelay: "120ms" }}
-        >
-          {SAMPLE_CARDS.map((c) => (
-            <div key={c.q} className="surface animate-fade-up p-4 opacity-0 shadow-subtle">
-              <span className="badge badge-primary badge-sm font-medium">{c.topic}</span>
-              <p className="mt-3 text-sm leading-snug text-base-content/80">{c.q}</p>
+              <div
+                className="mt-8 flex animate-fade-up flex-wrap items-center gap-3 opacity-0"
+                style={{ animationDelay: "210ms" }}
+              >
+                <Link to="/register" className="btn btn-primary">
+                  Start studying free
+                </Link>
+                <Link to="/login" className="btn btn-ghost">
+                  I have an account
+                </Link>
+              </div>
             </div>
-          ))}
+
+            {/* No justify-self here: it shrink-wraps the grid item to
+                min-content, which for a card of absolutely-positioned faces is
+                nothing at all. Stretching to fill the track and centring inside
+                it is what actually puts the card where the track is. */}
+            <div
+              className="animate-fade-up opacity-0"
+              style={{ animationDelay: "280ms" }}
+            >
+              <HeroDemo />
+            </div>
+          </div>
         </div>
       </section>
 

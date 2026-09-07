@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getMe, login } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { returnTo } from "../returnTo.js";
 import AuthLayout from "../components/AuthLayout.jsx";
 import OAuthButtons from "../components/OAuthButtons.jsx";
 
@@ -20,6 +21,9 @@ export default function Login() {
   const justReset = params.get("reset") === "1";
   const { setUser } = useAuth();
   const navigate = useNavigate();
+  // Where ProtectedRoute bounced them from, if it did. Signing in should
+  // finish the navigation they started, not restart it at the dashboard.
+  const destination = returnTo(useLocation());
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,7 +32,9 @@ export default function Login() {
     try {
       await login(email, password);
       setUser(await getMe());
-      navigate("/dashboard");
+      // replace, so Back from the destination does not land on the form they
+      // have just successfully submitted.
+      navigate(destination, { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

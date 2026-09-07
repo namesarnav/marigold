@@ -31,11 +31,15 @@ export default function Navbar() {
         <Logo />
 
         <nav className="ml-auto flex items-center gap-1 sm:gap-2">
+          {/* Dropped on the narrowest screens once signed in: Logo, Pricing,
+              Dashboard and Log out together overflow a 390px viewport, and
+              pricing is the least useful of them to someone who already has an
+              account. Signed out it always shows — there it is the point. */}
           <Link
             to="/pricing"
             className={`btn btn-ghost btn-sm font-medium ${
-              isActive("/pricing") ? "text-base-content" : "text-base-content/60"
-            }`}
+              user ? "max-sm:hidden" : ""
+            } ${isActive("/pricing") ? "text-base-content" : "text-base-content/60"}`}
           >
             Pricing
           </Link>

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getMe, register } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { returnTo } from "../returnTo.js";
 import { checkPassword, MIN_PASSWORD_LENGTH, PASSWORD_HINT } from "../passwordPolicy.js";
 import AuthLayout from "../components/AuthLayout.jsx";
 import OAuthButtons from "../components/OAuthButtons.jsx";
@@ -14,6 +15,11 @@ export default function Register() {
   const [error, setError] = useState("");
   const { setUser } = useAuth();
   const navigate = useNavigate();
+  // Same hand-off as the sign-in form: someone who hit a protected link, had
+  // no account, and registered on the spot should still arrive where they
+  // were headed. With the gate on they meet the verification screen first —
+  // ProtectedRoute renders it in place, so the destination survives.
+  const destination = returnTo(useLocation());
 
   // Shown under the field as the user types, but only once they have typed
   // something — an empty form should not open with a complaint.
@@ -35,7 +41,7 @@ export default function Register() {
       // A new password account is unverified, so this lands on the
       // verification gate rather than the dashboard itself — that screen is
       // where "check your inbox" and the resend button live.
-      navigate("/dashboard");
+      navigate(destination, { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
