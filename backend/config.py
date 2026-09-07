@@ -33,6 +33,20 @@ class Settings(BaseSettings):
     frontend_base_url: str = "http://localhost:5173"
     backend_base_url: str = "http://localhost:8000"
 
+    # --- Verification gate -------------------------------------------------
+    # Whether an unconfirmed account is blocked from the core features.
+    #
+    # True is the real behaviour and the default, so a deployment that says
+    # nothing gets the gate. Setting it false exists for testing the app
+    # end-to-end without a working mailbox — which is otherwise impossible,
+    # because with EMAIL_BACKEND=console the only copy of the link is in the
+    # server log.
+    #
+    # Turning it off does NOT mark anyone verified: `email_verified` still
+    # tracks reality, the flag only stops it being enforced. So switching the
+    # gate back on returns every account to exactly the state it had.
+    require_email_verification: bool = True
+
     # --- Email tokens ------------------------------------------------------
     verification_token_expire_minutes: int = 60 * 24  # 24h; a signup link can wait
     reset_token_expire_minutes: int = 30  # short, per the security requirement

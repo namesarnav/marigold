@@ -80,6 +80,7 @@ def user_out(db: Session, user: User) -> UserOut:
         name=user.name,
         email_verified=bool(user.email_verified),
         auth_methods=_auth_methods(db, user),
+        verification_required=settings.require_email_verification,
     )
 
 

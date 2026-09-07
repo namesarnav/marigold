@@ -39,6 +39,13 @@ class UserOut(BaseModel):
     # makes sense to offer.
     auth_methods: List[str] = Field(default_factory=list)
 
+    # Whether this server enforces the verification gate. A server property
+    # rather than a user one, carried here so the client learns it from a call
+    # it already makes on every load instead of a second round trip. Without it
+    # the frontend would keep blocking unverified accounts after the backend had
+    # stopped, and turning the gate off would appear to do nothing.
+    verification_required: bool = True
+
     class Config:
         from_attributes = True
 

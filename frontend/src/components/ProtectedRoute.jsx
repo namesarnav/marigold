@@ -23,6 +23,15 @@ export default function ProtectedRoute({ children }) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (!user.email_verified) return <VerifyEmailGate />;
+
+  // `verification_required` is the server telling us whether it is enforcing
+  // the gate. Checking it here keeps the two halves from disagreeing: with the
+  // gate off the API serves an unverified account normally, and blocking it in
+  // the UI anyway would leave the app unusable for a reason the backend no
+  // longer holds. It defaults to true, so an older server that does not send
+  // the field still gets gated.
+  const gated = user.verification_required !== false;
+  if (gated && !user.email_verified) return <VerifyEmailGate />;
+
   return children;
 }

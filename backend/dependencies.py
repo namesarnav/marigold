@@ -82,7 +82,15 @@ def get_verified_user(current_user: User = Depends(get_current_user)) -> User:
 
     403 rather than 401: the credentials are valid, the account just is not
     permitted yet. A 401 would make the frontend's refresh-and-retry logic spin.
+
+    `require_email_verification=false` turns the gate off wholesale. It is not a
+    per-user override and it does not change any stored flag: the account stays
+    unverified, it is simply not stopped. Keep it on anywhere real users can
+    reach, or an unconfirmed address is as good as a confirmed one.
     """
+    if not settings.require_email_verification:
+        return current_user
+
     if not current_user.email_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

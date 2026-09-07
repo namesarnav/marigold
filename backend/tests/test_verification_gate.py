@@ -158,3 +158,76 @@ def _walk_dependencies(dependant):
     yield dependant
     for sub in dependant.dependencies:
         yield from _walk_dependencies(sub)
+
+
+# ---------------------------------------------------------------------------
+# The escape hatch
+# ---------------------------------------------------------------------------
+#
+# `require_email_verification=false` exists so the app can be exercised without
+# a working mailbox: with EMAIL_BACKEND=console the only copy of a verification
+# link is in the server log. It is off by default and must stay that way, which
+# is what the first test here pins.
+
+def test_the_gate_is_enforced_unless_explicitly_disabled():
+    """A server that configures nothing must gate. The default is the safe one."""
+    from backend.config import Settings
+
+    settings = Settings(gemini_api_key="fake", secret_key="test")
+
+    assert settings.require_email_verification is True
+
+
+def test_disabling_the_gate_lets_an_unverified_account_through(client, monkeypatch):
+    from backend import dependencies
+
+    headers = unverified_headers(client, email="ungated@example.com")
+    # Blocked while the gate stands.
+    assert client.get("/api/documents", headers=headers).status_code == 403
+
+    monkeypatch.setattr(
+        dependencies.settings, "require_email_verification", False, raising=False
+    )
+
+    assert client.get("/api/documents", headers=headers).status_code == 200
+
+
+def test_disabling_the_gate_does_not_mark_anyone_verified(client, monkeypatch):
+    """The flag suspends enforcement; it must not rewrite the account.
+
+    This is what makes it safe to turn back on: every account returns to exactly
+    the state it was in, rather than silently having been promoted while off.
+    """
+    from backend import dependencies
+
+    headers = unverified_headers(client, email="still-unverified@example.com")
+    monkeypatch.setattr(
+        dependencies.settings, "require_email_verification", False, raising=False
+    )
+
+    me = client.get("/api/auth/me", headers=headers).json()
+    assert me["email_verified"] is False
+
+    # Re-enforcing puts the same account straight back behind the gate.
+    monkeypatch.setattr(
+        dependencies.settings, "require_email_verification", True, raising=False
+    )
+    assert client.get("/api/documents", headers=headers).status_code == 403
+
+
+def test_me_reports_whether_the_server_is_enforcing(client, monkeypatch):
+    """The frontend gate reads this; if it lies, the two halves disagree.
+
+    With the API serving an unverified account normally and the UI still
+    blocking it, the app would be unusable for a reason the backend no longer
+    holds — and turning the gate off would look like it did nothing.
+    """
+    from backend.routes import auth as auth_routes
+
+    headers = unverified_headers(client, email="reports@example.com")
+    assert client.get("/api/auth/me", headers=headers).json()["verification_required"] is True
+
+    monkeypatch.setattr(
+        auth_routes.settings, "require_email_verification", False, raising=False
+    )
+    assert client.get("/api/auth/me", headers=headers).json()["verification_required"] is False
