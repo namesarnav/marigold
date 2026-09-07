@@ -17,9 +17,9 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..dependencies import get_verified_user
-from ..models import Flashcard, Interaction, User
+from ..models import Document, Flashcard, Interaction, User
 from ..review import rank_user_concepts
-from ..schemas import ReviewConceptOut, ReviewQueueOut
+from ..schemas import ReviewConceptOut, ReviewDocumentRef, ReviewQueueOut
 
 router = APIRouter(prefix="/api/review", tags=["review"])
 
@@ -89,6 +89,21 @@ def review_queue(
         .all()
     )
 
+    # Which decks hold cards for each ranked concept. One query for the whole
+    # page rather than one per concept.
+    docs_by_concept: dict = {}
+    doc_rows = (
+        db.query(Flashcard.concept_id, Document.id, Document.filename)
+        .join(Document, Document.id == Flashcard.doc_id)
+        .filter(Flashcard.concept_id.in_(concept_ids))
+        .distinct()
+        .all()
+    )
+    for concept_id, doc_id, filename in doc_rows:
+        docs_by_concept.setdefault(concept_id, []).append(
+            ReviewDocumentRef(id=doc_id, filename=filename)
+        )
+
     rows: List[ReviewConceptOut] = []
     for concept, score in ranked:
         rows.append(
@@ -106,6 +121,7 @@ def review_queue(
                 days_since_last_review=(
                     None if score is None else score.days_since_last_review
                 ),
+                documents=docs_by_concept.get(concept.id, []),
             )
         )
 

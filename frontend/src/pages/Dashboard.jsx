@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   listDocuments, deleteDocument, renameDocument,
   logout, getQuizHistory, getStats,
@@ -7,6 +7,11 @@ import {
 import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../toast.jsx";
 import UploadZone from "../components/UploadZone.jsx";
+import ReviewQueue from "../components/ReviewQueue.jsx";
+
+// The tabs, and the only values `?view=` accepts — anything else falls back to
+// Documents rather than rendering a blank pane.
+const VIEWS = ["documents", "review", "history"];
 
 function greeting(name) {
   const h = new Date().getHours();
@@ -110,6 +115,7 @@ function Sidebar({ view, setView, user, onLogout }) {
       <nav className="flex-1 px-3 py-4 space-y-1">
         {[
           { id: "documents", label: "My Documents", icon: "📄" },
+          { id: "review",    label: "What to Review", icon: "🎯" },
           { id: "history",   label: "Quiz History",  icon: "📊" },
         ].map((item) => (
           <button
@@ -143,7 +149,13 @@ function Sidebar({ view, setView, user, onLogout }) {
 export default function Dashboard() {
   const { user, setUser } = useAuth();
   const navigate = useNavigate();
-  const [view, setView] = useState("documents");
+  // The open tab lives in the URL, so a refresh keeps you where you were and a
+  // view can be linked to directly. Previously any reload dropped back to
+  // Documents, which is a small thing that gets irritating quickly.
+  const [params, setParams] = useSearchParams();
+  const view = VIEWS.includes(params.get("view")) ? params.get("view") : "documents";
+  const setView = (v) =>
+    setParams(v === "documents" ? {} : { view: v }, { replace: true });
   const [documents, setDocuments] = useState([]);
   const [renamingId, setRenamingId] = useState(null);
   const [quizHistory, setQuizHistory] = useState([]);
@@ -208,6 +220,10 @@ export default function Dashboard() {
   };
 
   const renderMain = () => {
+    // Self-contained: it loads its own data and owns the projection control,
+    // so the dashboard does not need state for either.
+    if (view === "review") return <ReviewQueue />;
+
     if (view === "history") {
       return (
         <div>

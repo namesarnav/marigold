@@ -204,6 +204,18 @@ class ConceptOut(BaseModel):
     interaction_count: int
 
 
+class ReviewDocumentRef(BaseModel):
+    """A deck containing cards for a concept, so the queue is actionable.
+
+    Without this a review queue is a list of things you are told you are
+    forgetting with no way to go and study them — the cards live under a
+    document, and nothing else in the API maps a concept back to one.
+    """
+
+    id: int
+    filename: str
+
+
 class ReviewConceptOut(BaseModel):
     """One concept in the review queue, with why it is placed there.
 
@@ -226,6 +238,11 @@ class ReviewConceptOut(BaseModel):
     p_correct: Optional[float] = None
     source: str
     days_since_last_review: Optional[float] = None
+
+    # Every deck holding a card for this concept. Usually one, but a concept
+    # deliberately spans documents — that is the whole point of tracking
+    # retention per concept rather than per deck.
+    documents: List[ReviewDocumentRef] = Field(default_factory=list)
 
 
 class ReviewQueueOut(BaseModel):

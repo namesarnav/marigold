@@ -103,6 +103,36 @@ def test_never_practised_concepts_are_included(client, auth_headers, minimal_pdf
     assert any(c["label"] == "Recursion" for c in unpractised)
 
 
+def test_each_concept_links_to_the_decks_holding_its_cards(client, auth_headers, studied):
+    """A queue you cannot act on is just a list of bad news.
+
+    Nothing else in the API maps a concept back to a document, so without this
+    the UI can tell a user what they are forgetting but not where to go and
+    study it.
+    """
+    body = client.get("/api/review/next", headers=auth_headers).json()
+
+    row = next(c for c in body["concepts"] if c["card_count"] > 0)
+    assert row["documents"], row
+    assert row["documents"][0]["id"] == studied["doc_id"]
+    assert row["documents"][0]["filename"]
+
+
+def test_a_concept_spanning_two_documents_lists_both(client, auth_headers, minimal_pdf, studied):
+    """Concepts are tracked across decks — that is the point of tracking them.
+
+    The same topic uploaded in a second document resolves to the same concept,
+    and the queue has to offer both places its cards live.
+    """
+    upload_with_topics(client, auth_headers, minimal_pdf, ["Python"], filename="more.pdf")
+
+    body = client.get("/api/review/next", headers=auth_headers).json()
+    python_row = next(c for c in body["concepts"] if c["label"] == "Python")
+
+    assert len(python_row["documents"]) == 2
+    assert {d["filename"] for d in python_row["documents"]} == {"notes.pdf", "more.pdf"}
+
+
 def test_the_queue_is_ordered_most_at_risk_first(client, auth_headers, studied):
     body = client.get("/api/review/next", headers=auth_headers).json()
 

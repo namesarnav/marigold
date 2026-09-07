@@ -326,6 +326,22 @@ export async function regenerateFlashcards(docId) {
   return request("POST", `/api/flashcards/${docId}/regenerate`);
 }
 
+// Review
+
+/**
+ * Concepts ranked by forgetting risk, most at-risk first.
+ *
+ * `asOf` may be a future Date — the backend projects the forgetting curve
+ * forward, which is what drives the exam-readiness view. It is sent through
+ * `URLSearchParams` rather than string concatenation because an ISO offset
+ * contains "+", which decodes to a space in a query string and is rejected.
+ */
+export async function getReviewQueue({ limit = 20, asOf = null } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (asOf) params.set("as_of", asOf.toISOString());
+  return request("GET", `/api/review/next?${params}`);
+}
+
 // Quiz
 export async function startQuiz(docId, numQuestions) {
   return request("POST", "/api/quiz/start", { doc_id: docId, num_questions: numQuestions });

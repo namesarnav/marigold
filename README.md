@@ -182,8 +182,9 @@ Main routes:
 ## Status
 
 Working: accounts and OAuth, PDF upload with background card generation,
-flashcards, quizzes, stats, the interaction log, and a review queue that ranks
-concepts by forgetting risk.
+flashcards, quizzes, stats, the interaction log, and a **What to Review** tab on
+the dashboard that ranks concepts by forgetting risk, with a projection control
+for what will have decayed in a week or a month.
 
 The ML pipeline is validated against ASSISTments 2009 (held-out AUC 0.7535) and
 `GET /api/review/next` now serves from it — but **only the cold-start half**.
