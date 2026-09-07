@@ -89,6 +89,21 @@ services:
       # Verification and reset emails are printed to the log instead of sent.
       # Read the link out of `docker compose logs api`.
       EMAIL_BACKEND: console
+
+      # OAuth. Empty by default, and the sign-in buttons render from
+      # /api/auth/oauth/providers — which lists only the providers that have
+      # credentials — so with nothing set here the login page shows no buttons
+      # at all. That is deliberate (a button that 503s on click is worse), but
+      # it does mean "the Google button is missing" is a configuration state,
+      # not a bug.
+      #
+      # To turn it on, put these in a .env file next to this one and register
+      # http://localhost:8000/api/auth/oauth/google/callback
+      # as an authorised redirect URI in the Google console.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     ports:
       - "8000:8000"
     volumes:

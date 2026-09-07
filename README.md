@@ -46,6 +46,31 @@ docker compose logs api | grep -A6 'email:console'
 
 `docker compose down -v` throws the database away.
 
+### Google / GitHub sign-in locally
+
+The sign-in buttons are rendered from `/api/auth/oauth/providers`, which lists
+only the providers the server holds credentials for — so with none set the
+login page shows no buttons at all. That is deliberate (a button that answers
+503 when clicked is worse than no button), but it does mean a missing Google
+button is a configuration state rather than a bug.
+
+To enable it, put the credentials in a `.env` file next to `docker-compose.yml`:
+
+```bash
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+```
+
+and register this exact callback in the Google console:
+
+```
+http://localhost:8000/api/auth/oauth/google/callback
+```
+
+Provider sign-ins arrive already email-verified, so they skip the verification
+gate entirely — which makes this the quickest way to get a usable account
+without configuring email delivery.
+
 See the header of [`docker-compose.yml`](docker-compose.yml) for what this
 setup does *not* exercise (the frontend bundle, TLS, real email delivery), and
 how to run the production image locally instead.
