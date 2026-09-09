@@ -1,6 +1,6 @@
 # Marigold: one image serving the FastAPI API and the built Vite bundle.
 #
-# This is what Railway builds and runs (see railway.json). One service, one
+# This is what Railway builds and runs (see railway.toml). One service, one
 # image: the API also serves the frontend's static files, so there is no second
 # deployment, no CORS between them, and no cross-origin cookie problem.
 #
