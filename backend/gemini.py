@@ -32,7 +32,7 @@ Text: {extracted_text}
 
     def _call_model() -> str:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             contents=prompt,
         )
         # response.text is a convenience that concatenates parts
