@@ -59,9 +59,9 @@ services:
   api:
     build:
       context: .
-      # Only the backend stage: skips the npm build, so a rebuild is seconds
-      # rather than a minute. The frontend runs on the host in dev.
-      target: backend
+      # The API-only image. The frontend is a separate service now, so there is
+      # no npm build in this one at all and a rebuild is seconds.
+      dockerfile: backend/Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,7 +79,8 @@ services:
       # everything else (auth, quizzes, the interaction log) works fine.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-unset}
 
-      CORS_ORIGINS: http://localhost:5173
+      # Vite dev server, plus the nginx container from the `web` profile.
+      CORS_ORIGINS: http://localhost:5173,http://localhost:8081
       FRONTEND_BASE_URL: http://localhost:5173
       BACKEND_BASE_URL: http://localhost:8000
 
@@ -130,6 +131,31 @@ services:
     command: >
       sh -c "alembic upgrade head &&
              uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # The frontend as it is actually deployed: built bundle behind nginx, on its
+  # own origin. Behind a profile because it costs an npm build and day-to-day
+  # development uses the Vite dev server on the host instead.
+  #
+  #   docker compose --profile web up -d --build
+  #
+  # This is the only way to exercise the cross-origin path locally — CORS, and
+  # the SameSite=None refresh cookie. Note the cookie will NOT survive here:
+  # SameSite=None requires Secure, and this is plain HTTP. Cross-origin auth
+  # can only be tested end to end over HTTPS, which in practice means Railway.
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # Baked into the bundle at build time, so changing it needs --build.
+        VITE_API_BASE_URL: http://localhost:8000
+    profiles: ["web"]
+    depends_on:
+      - api
+    environment:
+      PORT: 8080
+    ports:
+      - "8081:8080"
 
 volumes:
   pgdata:

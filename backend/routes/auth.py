@@ -121,7 +121,9 @@ def _set_refresh_cookie(response: Response, raw: str) -> None:
         httponly=True,
         secure=settings.cookie_secure,
         max_age=settings.refresh_token_expire_days * 86400,
-        samesite="lax",
+        # "lax" same-origin, "none" when the frontend is a separate service on
+        # its own domain. See Settings.cookie_samesite.
+        samesite=settings.cookie_samesite,
         path="/",
     )
 
@@ -132,7 +134,7 @@ def _clear_refresh_cookie(response: Response) -> None:
         key="refresh_token",
         httponly=True,
         secure=settings.cookie_secure,
-        samesite="lax",
+        samesite=settings.cookie_samesite,
         path="/",
     )
 

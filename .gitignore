@@ -31,3 +31,4 @@ openapi.yaml
 
 # Agent scratch space and worktrees
 .claude/
+.env

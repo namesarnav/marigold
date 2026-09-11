@@ -27,6 +27,22 @@ class Settings(BaseSettings):
     # session cookie travels in cleartext. Set from the deployed ConfigMap.
     cookie_secure: bool = False
 
+    # --- Cross-site cookies ------------------------------------------------
+    # SameSite on the refresh cookie. "lax" is right when the frontend and the
+    # API are the same origin. A split deployment puts them on different
+    # Railway subdomains, which are cross-site, and a Lax cookie is simply not
+    # sent on those requests — login appears to work and then every session
+    # dies at the first token refresh.
+    #
+    # "none" is what makes the cross-site case work, and the browser only
+    # honours it on a Secure cookie, so the validator below refuses the
+    # combination that silently drops the cookie instead.
+    #
+    # Note this is still subject to third-party cookie blocking: Safari blocks
+    # them outright and Chrome is phasing them out. Same-origin remains the
+    # more durable arrangement.
+    cookie_samesite: str = "lax"  # lax | none | strict
+
     # --- Public URLs -------------------------------------------------------
     # Where the emailed links point, and where OAuth callbacks bounce the
     # browser back to once the flow finishes.
@@ -77,6 +93,30 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     github_client_id: str = ""
     github_client_secret: str = ""
+
+    @model_validator(mode="after")
+    def _check_cookie_samesite(self):
+        """Reject a SameSite/Secure combination the browser would discard.
+
+        `SameSite=None` without `Secure` is ignored by every current browser,
+        so the refresh cookie would be dropped on arrival and the only symptom
+        would be users being logged out unpredictably. Failing at startup is
+        far cheaper to diagnose.
+        """
+        allowed = {"lax", "none", "strict"}
+        value = self.cookie_samesite.lower()
+        if value not in allowed:
+            raise ValueError(
+                f"cookie_samesite must be one of {sorted(allowed)}, got {self.cookie_samesite!r}"
+            )
+        self.cookie_samesite = value
+
+        if value == "none" and not self.cookie_secure:
+            raise ValueError(
+                "COOKIE_SAMESITE=none requires COOKIE_SECURE=true; browsers "
+                "discard a SameSite=None cookie that is not Secure."
+            )
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -155,8 +195,12 @@ class Settings(BaseSettings):
             # is always https.
             self.cookie_secure = True
         if "cors_origins" not in supplied:
-            # Same-origin in this deployment, so this mostly does not come into
-            # play — it matters only if a separate frontend is pointed here.
+            # This default assumes the frontend is served from this same
+            # service. In the two-service deployment it is NOT: the browser
+            # sends the frontend's domain as Origin, which this value does not
+            # contain, and every API call fails preflight. Set CORS_ORIGINS
+            # explicitly to the frontend service's URL there — doing so lands
+            # in model_fields_set and this line is skipped.
             self.cors_origins = origin
 
         return self

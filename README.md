@@ -23,7 +23,7 @@ concepts by how likely you are to have forgotten them.
 - **Auth** — JWT + bcrypt, email verification, password reset, Google/GitHub OAuth
 - **AI** — Google Gemini 2.5 Flash for card generation; PyMuPDF for PDF text
 - **ML** — PyTorch, sentence-transformers, scikit-learn
-- **Deployment** — Railway, one Docker image serving both the API and the bundle
+- **Deployment** — Railway, two Docker images: the API, and nginx serving the bundle
 
 ## Local development
 
@@ -101,65 +101,91 @@ alembic upgrade head
 
 ## Deployment
 
-Railway, from the [`Dockerfile`](Dockerfile). One service: the multi-stage build
-compiles the Vite bundle and the FastAPI app serves it as static files, so there
-is no second deployment, no cross-origin CORS, and no third-party cookie
-problem. Nothing is written to disk — PDFs are parsed in memory and the
-extracted text goes to Postgres — so the service needs no volume.
+Railway, two services built from two Dockerfiles in this repo:
+
+| Service | Dockerfile | What it runs |
+| --- | --- | --- |
+| API | `backend/Dockerfile` | Alembic migrations, then FastAPI under uvicorn |
+| Frontend | `frontend/Dockerfile` | Vite build, served by nginx with an SPA fallback |
+
+Both build from the repository root, because the API image needs `alembic.ini`
+and `ml/`, which sit above `backend/`.
+
+The two are separate origins, and that has three consequences that are easy to
+miss because each fails silently:
+
+- **`CORS_ORIGINS` must name the frontend's URL.** It is not derived correctly
+  for this layout: the Railway default describes the API's own domain, which
+  the browser never sends as `Origin`.
+- **`COOKIE_SAMESITE` must be `none`.** The refresh token is an `HttpOnly`
+  cookie, and a `Lax` cookie is not sent cross-site, so login appears to work
+  and every session dies at the first token refresh 15 minutes later. `none`
+  requires `COOKIE_SECURE=true`; the config refuses to start on the
+  combination browsers would discard. Note Safari blocks third-party cookies
+  outright and Chrome is phasing them out, so this is the arrangement's real
+  weak point.
+- **`VITE_API_BASE_URL` is a build argument, not a runtime variable.** Vite
+  substitutes it at compile time, so changing it requires rebuilding the
+  frontend service rather than restarting it.
 
 ### First deploy
 
-1. **Create the project.** In Railway, *New Project → Deploy from GitHub repo*,
-   and pick this repository. It reads [`railway.toml`](railway.toml) and builds
-   the Dockerfile; no other build configuration is needed.
+1. **Create the project.** *New Project → Deploy from GitHub repo*, pick this
+   repository. Do this twice, once per service, both pointed at the same repo.
 
 2. **Add the databases.** *New → Database → PostgreSQL*, then again for Redis.
 
-3. **Set the service variables** (*Variables* on the app service):
+3. **Configure the API service.** *Settings → Build → Dockerfile Path* =
+   `backend/Dockerfile`, root directory `/`, and *Deploy → Health Check Path* =
+   `/healthz`. Then set its variables:
 
    | Variable | Value |
    | --- | --- |
    | `SECRET_KEY` | `openssl rand -hex 32` |
    | `GEMINI_API_KEY` | Your Google AI Studio key |
-   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
-   | `REDIS_URL` | `${{Redis.REDIS_URL}}` |
+   | `DATABASE_URL` | reference to Postgres, added with the variable picker |
+   | `REDIS_URL` | reference to Redis, added with the variable picker |
+   | `COOKIE_SAMESITE` | `none` |
+   | `CORS_ORIGINS` | the frontend service's URL, once it has one |
+   | `FRONTEND_BASE_URL` | the frontend service's URL |
 
-   Use the `${{...}}` reference syntax rather than pasting the URLs: a pasted
-   copy goes stale the moment a database is replaced. Every other variable has
-   a working default — [`.env.example`](.env.example) documents the full set.
+   Add the two database URLs with Railway's reference picker rather than
+   typing `${{Postgres.DATABASE_URL}}` by hand. A name that does not match the
+   service exactly is passed through as literal text, and the first thing to
+   read it is SQLAlchemy, which fails with `Could not parse SQLAlchemy URL`.
 
-4. **Generate a domain.** *Settings → Networking → Generate Domain*. Railway
-   injects it as `RAILWAY_PUBLIC_DOMAIN`, and `backend/config.py` derives
-   `FRONTEND_BASE_URL`, `BACKEND_BASE_URL`, `CORS_ORIGINS` and `COOKIE_SECURE`
-   from it — so emailed links, OAuth callbacks and the Secure cookie flag are
-   all correct without being configured by hand. Setting any of them explicitly
-   overrides the derived value, which is how a custom domain is configured.
+4. **Configure the frontend service.** *Dockerfile Path* =
+   `frontend/Dockerfile`, health check `/healthz`, and one variable:
 
-Migrations run in the container's entrypoint, before uvicorn binds. A failed
-migration aborts the start, so the health check never passes and Railway keeps
-the previous deployment serving rather than cutting over to a container whose
-code and schema disagree.
+   | Variable | Value |
+   | --- | --- |
+   | `VITE_API_BASE_URL` | the API service's public URL |
 
-### After the first deploy
+5. **Generate a domain for each** under *Settings → Networking*. This is also
+   what sets `RAILWAY_PUBLIC_DOMAIN`, which the API reads at startup to derive
+   `BACKEND_BASE_URL` and `COOKIE_SECURE` — so redeploy the API afterwards, or
+   it keeps the localhost defaults it booted with.
 
-Pushing to `main` redeploys. `/healthz` executes `SELECT 1`, so a container that
-is up but cannot reach Postgres is never sent traffic.
+Because each service needs the other's domain, expect to deploy once, generate
+both domains, fill in the cross-references, and redeploy. The frontend needs a
+rebuild rather than a restart for `VITE_API_BASE_URL` to take.
 
-Two things are not on by default and are worth knowing about:
+Migrations run in the API container's entrypoint, before uvicorn binds. A
+failed migration aborts the start, so the health check never passes and Railway
+keeps the previous deployment serving rather than cutting over to a container
+whose code and schema disagree. That is also why the API service should stay at
+one replica: two starting together would run migrations concurrently, and the
+loser can trip its own health check.
 
-- `EMAIL_BACKEND` is `console`, so verification links are printed to the Railway
-  logs instead of being sent. Real signups need `EMAIL_BACKEND=ses` and SES
-  credentials.
-- OAuth buttons only appear for providers with credentials set. Each provider's
-  redirect URI is `https://<your-domain>/api/auth/oauth/<provider>/callback`.
+### Running the split locally
 
-### Scaling past one instance
+```bash
+docker compose --profile web up -d --build   # API on :8000, nginx on :8081
+```
 
-`railway.toml` pins `numReplicas = 1` because the entrypoint migrates on every
-start; concurrent replicas would serialise on the migration lock and a loser can
-trip its own health check. Moving `alembic upgrade head` out of
-[`docker-entrypoint.sh`](docker-entrypoint.sh) into a pre-deploy command is the
-prerequisite for raising it.
+This exercises CORS, but not the cookie: `SameSite=None` requires `Secure`, and
+compose serves plain HTTP. Cross-origin auth can only be verified end to end
+over HTTPS.
 
 ## API
 

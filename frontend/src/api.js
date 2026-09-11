@@ -1,6 +1,18 @@
-const BASE = (import.meta.env.DEV
-  ? (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000")
-  : ""
+// Where the API lives.
+//
+// VITE_API_BASE_URL is baked in at build time — Vite substitutes
+// import.meta.env during compilation, so this is a property of the bundle, not
+// of the running container. Changing it on the frontend service requires a
+// rebuild, not a restart.
+//
+// Empty means "same origin", which is correct when one service serves both the
+// API and this bundle. In the split deployment the frontend and the API are
+// different Railway services on different domains, so this must be set to the
+// API service's public URL or every request goes to the static file server and
+// comes back as index.html.
+const BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? "http://localhost:8000" : "")
 ).replace(/\/+$/, "");
 
 function getToken() {

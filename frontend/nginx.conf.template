@@ -1,0 +1,40 @@
+# Rendered by the nginx image's envsubst pass at container start, which is how
+# ${PORT} gets filled in — Railway assigns it at runtime.
+server {
+    listen       ${PORT};
+    server_name  _;
+    root         /usr/share/nginx/html;
+    index        index.html;
+
+    # Health endpoint for Railway. Answered by nginx directly so it reports
+    # whether this service is up, independently of the API.
+    location = /healthz {
+        access_log off;
+        add_header Content-Type application/json;
+        return 200 '{"status":"ok"}';
+    }
+
+    # Hashed filenames, so these can be cached hard and immutably.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # index.html must never be cached, or a browser keeps loading a shell that
+    # references asset hashes the new deploy no longer has.
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    # The SPA fallback. The router is a BrowserRouter, so /dashboard is a
+    # client-side route with no file behind it; without this, a refresh or a
+    # pasted deep link 404s.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+}
