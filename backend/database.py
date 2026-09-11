@@ -18,7 +18,18 @@ if settings.database_url.startswith("sqlite"):
         poolclass=StaticPool,
     )
 else:
-    engine = create_engine(settings.database_url)
+    engine = create_engine(
+        settings.database_url,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+        pool_timeout=settings.db_pool_timeout,
+        pool_recycle=settings.db_pool_recycle,
+        # Check a pooled connection is still alive before handing it out. Costs
+        # a round trip; without it, any connection the provider closed while
+        # idle is handed to whichever request happens to be next and fails
+        # there, which makes the error look unrelated to its cause.
+        pool_pre_ping=True,
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

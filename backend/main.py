@@ -87,8 +87,15 @@ def handle_database_error(request: Request, exc: SQLAlchemyError):
     The detail is deliberately generic: the exception text contains table and
     constraint names. The traceback goes to the log.
     """
-    logging.getLogger(__name__).exception(
-        "database error handling %s %s", request.method, request.url.path
+    # exc_info=exc, not .exception(): a FastAPI exception handler does not run
+    # inside an `except` block, so sys.exc_info() is empty there and
+    # logger.exception() writes "NoneType: None" where the traceback should be —
+    # throwing away the one thing this handler exists to preserve.
+    logging.getLogger(__name__).error(
+        "database error handling %s %s",
+        request.method,
+        request.url.path,
+        exc_info=exc,
     )
     return JSONResponse(
         status_code=500,

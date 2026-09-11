@@ -13,6 +13,26 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
 
+    # --- Database pool -----------------------------------------------------
+    # SQLAlchemy's defaults are 5 connections plus 10 overflow, which is far
+    # too small for this workload and fails in a way that looks like an
+    # application bug: past 15 concurrent database users every further request
+    # blocks for pool_timeout and then returns 500. Measured locally, the API
+    # collapsed from ~665 req/s to under 1 req/s at 64 concurrent callers.
+    #
+    # Sized against the server, not guessed. FastAPI runs `def` endpoints in a
+    # threadpool of 40, so 40 is the most concurrent database users one worker
+    # can have; 30 covers the realistic peak while leaving headroom under
+    # Postgres's default max_connections of 100 once WEB_CONCURRENCY grows.
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+    db_pool_timeout: int = 30
+    # Recycle below any idle timeout the provider imposes. Railway's proxy
+    # drops idle connections, and a pooled-but-dead connection surfaces as a
+    # random "server closed the connection unexpectedly" on an unrelated
+    # request.
+    db_pool_recycle: int = 1800
+
     # --- Logging -----------------------------------------------------------
     # Nothing else configures the root logger, so without this the application's
     # own loggers emit nothing below WARNING: only Python's last-resort handler
