@@ -79,8 +79,9 @@ services:
       # everything else (auth, quizzes, the interaction log) works fine.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-unset}
 
-      # Vite dev server, plus the nginx container from the `web` profile.
-      CORS_ORIGINS: http://localhost:5173,http://localhost:8081
+      # The Vite dev server calls the API cross-origin. The `web` profile does
+      # not need an entry: nginx proxies /api, so its requests are same-origin.
+      CORS_ORIGINS: http://localhost:5173
       FRONTEND_BASE_URL: http://localhost:5173
       BACKEND_BASE_URL: http://localhost:8000
 
@@ -132,28 +133,25 @@ services:
       sh -c "alembic upgrade head &&
              uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload"
 
-  # The frontend as it is actually deployed: built bundle behind nginx, on its
-  # own origin. Behind a profile because it costs an npm build and day-to-day
-  # development uses the Vite dev server on the host instead.
+  # The frontend as it is actually deployed: built bundle behind nginx, with
+  # /api proxied to the api service. Behind a profile because it costs an npm
+  # build and day-to-day development uses the Vite dev server on the host.
   #
-  #   docker compose --profile web up -d --build
+  #   docker compose --profile web up -d --build     then open localhost:8081
   #
-  # This is the only way to exercise the cross-origin path locally — CORS, and
-  # the SameSite=None refresh cookie. Note the cookie will NOT survive here:
-  # SameSite=None requires Secure, and this is plain HTTP. Cross-origin auth
-  # can only be tested end to end over HTTPS, which in practice means Railway.
+  # Same shape as Railway: the browser talks only to nginx, and nginx forwards
+  # /api over the compose network, so this exercises the real proxy config.
   web:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-      args:
-        # Baked into the bundle at build time, so changing it needs --build.
-        VITE_API_BASE_URL: http://localhost:8000
     profiles: ["web"]
     depends_on:
       - api
     environment:
       PORT: 8080
+      # Runtime, not build time: nginx reads it at container start.
+      BACKEND_URL: http://api:8000
     ports:
       - "8081:8080"
 

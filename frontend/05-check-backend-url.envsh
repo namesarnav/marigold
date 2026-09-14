@@ -1,0 +1,23 @@
+#!/bin/sh
+# Validate BACKEND_URL before nginx renders its config.
+#
+# Sourced by the nginx image's entrypoint ahead of the envsubst step, so a bad
+# value stops the container here with a sentence explaining why, instead of an
+# nginx syntax error about a literal "${BACKEND_URL}" or a proxy that quietly
+# answers every API call with a 502.
+
+if [ -z "${BACKEND_URL:-}" ]; then
+  echo "ERROR: BACKEND_URL is not set. Set it on this service to the API's URL, e.g. https://\${{marigold-api.RAILWAY_PUBLIC_DOMAIN}}" >&2
+  exit 1
+fi
+
+# A trailing slash would be harmless to a person and fatal here: nginx would
+# treat it as a path and rewrite every /api/... request.
+BACKEND_URL="${BACKEND_URL%/}"
+
+if ! printf '%s' "$BACKEND_URL" | grep -Eq '^https?://[^/]+$'; then
+  echo "ERROR: BACKEND_URL must be scheme and host only, like https://api.example.com (no path). Got: $BACKEND_URL" >&2
+  exit 1
+fi
+
+export BACKEND_URL

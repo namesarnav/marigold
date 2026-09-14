@@ -1,17 +1,64 @@
-# Rendered by the nginx image's envsubst pass at container start, which is how
-# ${PORT} gets filled in — Railway assigns it at runtime.
+# Rendered at container start by the nginx image's envsubst pass, which fills
+# in ${PORT}, ${BACKEND_URL} and ${NGINX_LOCAL_RESOLVERS}. nginx's own
+# variables ($uri, $host, ...) are untouched: envsubst only replaces names that
+# are set in the environment.
+
+# Keep the scheme the browser actually used. Railway terminates TLS before this
+# container, so $scheme here is always "http"; the edge's header is the truth.
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+}
+
 server {
     listen       ${PORT};
+    listen       [::]:${PORT};
     server_name  _;
     root         /usr/share/nginx/html;
     index        index.html;
 
-    # Health endpoint for Railway. Answered by nginx directly so it reports
-    # whether this service is up, independently of the API.
+    # PDFs are uploaded through this proxy. nginx's default cap is 1 MB, which
+    # rejects most real documents with a 413 before the API ever sees them.
+    client_max_body_size 25m;
+
+    # Resolve the API's hostname per request rather than once at startup, so a
+    # redeploy that moves the API does not leave nginx pinned to a dead
+    # address. The resolvers come from the container's own /etc/resolv.conf.
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=30s ipv6=off;
+
+    # Health endpoint for Railway, answered by nginx itself so it reports on
+    # this service independently of the API.
     location = /healthz {
         access_log off;
         add_header Content-Type application/json;
         return 200 '{"status":"ok"}';
+    }
+
+    # The API, proxied so the browser only ever talks to this one origin.
+    #
+    # This is what makes the two-service deployment work in every browser. The
+    # refresh token is an HttpOnly cookie; if the browser called the API's own
+    # domain directly, that cookie would be cross-site, Safari would drop it,
+    # and both session refresh and Google sign-in would fail there. Through
+    # this proxy the cookie is first-party, so no CORS and no SameSite=None.
+    location /api/ {
+        # A variable, not a literal, so nginx re-resolves the host (see
+        # `resolver` above). With a variable and no path in the URL, nginx
+        # passes the request URI through unchanged: /api/x stays /api/x.
+        set $backend ${BACKEND_URL};
+        proxy_pass $backend;
+
+        # Railway routes by hostname, and TLS needs the right SNI name, so both
+        # must be the API's host rather than this service's.
+        proxy_ssl_server_name on;
+        proxy_set_header Host              $proxy_host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+
+        # Regenerating a deck calls Gemini synchronously and can outlast the
+        # 60 s default, which would surface as a 504 on a request that succeeds.
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
     }
 
     # Hashed filenames, so these can be cached hard and immutably.

@@ -44,26 +44,30 @@ class Settings(BaseSettings):
     # --- Cookie security ---------------------------------------------------
     # Sets the Secure flag on the session cookie. False locally (plain HTTP);
     # must be true anywhere the app is reachable over the internet, or the
-    # session cookie travels in cleartext. Set from the deployed ConfigMap.
+    # session cookie travels in cleartext. Derived as true from PUBLIC_URL or
+    # the Railway domain; see _apply_railway_defaults.
     cookie_secure: bool = False
 
     # --- Cross-site cookies ------------------------------------------------
-    # SameSite on the refresh cookie. "lax" is right when the frontend and the
-    # API are the same origin. A split deployment puts them on different
-    # Railway subdomains, which are cross-site, and a Lax cookie is simply not
-    # sent on those requests — login appears to work and then every session
-    # dies at the first token refresh.
+    # SameSite on the refresh cookie. Leave it "lax" for the Railway
+    # deployment: the frontend's nginx proxies /api, so the browser sees one
+    # origin and the cookie is first-party.
     #
-    # "none" is what makes the cross-site case work, and the browser only
-    # honours it on a Secure cookie, so the validator below refuses the
-    # combination that silently drops the cookie instead.
-    #
-    # Note this is still subject to third-party cookie blocking: Safari blocks
-    # them outright and Chrome is phasing them out. Same-origin remains the
-    # more durable arrangement.
+    # "none" is only for a frontend that calls this API's own domain directly.
+    # Browsers honour it only on a Secure cookie, so the last validator in this
+    # class refuses the combination; and Safari blocks such cross-site cookies
+    # regardless, which is why the deployment proxies instead.
     cookie_samesite: str = "lax"  # lax | none | strict
 
     # --- Public URLs -------------------------------------------------------
+    # The address people type into the browser. On Railway that is the
+    # FRONTEND service's domain, because its nginx proxies /api here — so set,
+    # on this service, PUBLIC_URL=https://${{marigold-web.RAILWAY_PUBLIC_DOMAIN}}.
+    # One value fills in frontend_base_url, backend_base_url and cors_origins,
+    # and turns cookie_secure on for https. Any of those set explicitly still
+    # wins. See _apply_railway_defaults.
+    public_url: str = ""
+
     # Where the emailed links point, and where OAuth callbacks bounce the
     # browser back to once the flow finishes.
     frontend_base_url: str = "http://localhost:5173"
@@ -72,16 +76,20 @@ class Settings(BaseSettings):
     # --- Verification gate -------------------------------------------------
     # Whether an unconfirmed account is blocked from the core features.
     #
-    # True is the real behaviour and the default, so a deployment that says
-    # nothing gets the gate. Setting it false exists for testing the app
-    # end-to-end without a working mailbox — which is otherwise impossible,
-    # because with EMAIL_BACKEND=console the only copy of the link is in the
-    # server log.
+    # DISABLED. The gate works by emailing a confirmation link, and no email
+    # delivery is configured: EMAIL_BACKEND=console only writes the link to the
+    # server log. With the gate on, every password signup would be stuck on
+    # "confirm your email" with no email coming.
+    #
+    # To re-enable: configure EMAIL_BACKEND=ses (see the SES settings below),
+    # then swap these two lines back, or set REQUIRE_EMAIL_VERIFICATION=true.
+    # The gate itself is intact and the test suite still exercises it.
     #
     # Turning it off does NOT mark anyone verified: `email_verified` still
     # tracks reality, the flag only stops it being enforced. So switching the
     # gate back on returns every account to exactly the state it had.
-    require_email_verification: bool = True
+    # require_email_verification: bool = True
+    require_email_verification: bool = False
 
     # --- Email tokens ------------------------------------------------------
     verification_token_expire_minutes: int = 60 * 24  # 24h; a signup link can wait
@@ -113,30 +121,6 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     github_client_id: str = ""
     github_client_secret: str = ""
-
-    @model_validator(mode="after")
-    def _check_cookie_samesite(self):
-        """Reject a SameSite/Secure combination the browser would discard.
-
-        `SameSite=None` without `Secure` is ignored by every current browser,
-        so the refresh cookie would be dropped on arrival and the only symptom
-        would be users being logged out unpredictably. Failing at startup is
-        far cheaper to diagnose.
-        """
-        allowed = {"lax", "none", "strict"}
-        value = self.cookie_samesite.lower()
-        if value not in allowed:
-            raise ValueError(
-                f"cookie_samesite must be one of {sorted(allowed)}, got {self.cookie_samesite!r}"
-            )
-        self.cookie_samesite = value
-
-        if value == "none" and not self.cookie_secure:
-            raise ValueError(
-                "COOKIE_SAMESITE=none requires COOKIE_SECURE=true; browsers "
-                "discard a SameSite=None cookie that is not Secure."
-            )
-        return self
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -176,7 +160,16 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _apply_railway_defaults(self):
-        """Fill the public-URL settings in from the domain Railway assigns.
+        """Fill the public-URL settings in from PUBLIC_URL or Railway's domain.
+
+        PUBLIC_URL comes first. In the two-service deployment the browser
+        talks to the frontend service, whose nginx proxies /api here, so the
+        public address is the frontend's domain, not this service's. Deriving
+        from this service's own RAILWAY_PUBLIC_DOMAIN there would send OAuth
+        callbacks and emailed links to a host that serves only JSON.
+
+        Without PUBLIC_URL this falls back to RAILWAY_PUBLIC_DOMAIN, which is
+        right for a single service that serves both halves.
 
         Railway injects RAILWAY_PUBLIC_DOMAIN (for example
         `marigold-production.up.railway.app`) into every deployment, and it is
@@ -197,33 +190,71 @@ class Settings(BaseSettings):
         holds the fields that were actually supplied, so a custom domain is
         configured the normal way and this never fights it.
         """
-        domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
-        if not domain:
-            return self
+        public = self.public_url.strip().rstrip("/")
+        if public:
+            if not public.startswith(("http://", "https://")):
+                raise ValueError(
+                    f"PUBLIC_URL must start with https:// or http://, got {self.public_url!r}"
+                )
+            origin = public
+            self.public_url = public
+        else:
+            domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+            if not domain:
+                return self
+            origin = f"https://{domain}"
 
-        origin = f"https://{domain}"
         supplied = self.model_fields_set
 
         if "frontend_base_url" not in supplied:
             self.frontend_base_url = origin
         if "backend_base_url" not in supplied:
-            # The API and the bundle are the same service and the same origin,
-            # so the OAuth callback host is this one too.
+            # The OAuth callback host is the public origin too: the browser
+            # reaches this API through it, directly or through the proxy.
             self.backend_base_url = origin
         if "cookie_secure" not in supplied:
-            # Railway terminates TLS in front of the container; the public URL
-            # is always https.
-            self.cookie_secure = True
+            # Railway terminates TLS in front of the container, so its public
+            # URLs are https. A plain-http PUBLIC_URL (a local proxy) is not.
+            self.cookie_secure = origin.startswith("https://")
         if "cors_origins" not in supplied:
-            # This default assumes the frontend is served from this same
-            # service. In the two-service deployment it is NOT: the browser
-            # sends the frontend's domain as Origin, which this value does not
-            # contain, and every API call fails preflight. Set CORS_ORIGINS
-            # explicitly to the frontend service's URL there — doing so lands
-            # in model_fields_set and this line is skipped.
+            # The public origin is the only one browsers should send. Behind
+            # the proxy requests are same-origin and CORS never comes into
+            # play; this only matters if something calls the API cross-origin.
             self.cors_origins = origin
 
         return self
+
+    @model_validator(mode="after")
+    def _check_cookie_samesite(self):
+        """Reject a SameSite/Secure combination the browser would discard.
+
+        Deliberately the LAST validator. Pydantic runs after-validators in
+        definition order, and cookie_secure is only settled once
+        _apply_railway_defaults has derived it. Checked any earlier,
+        COOKIE_SAMESITE=none on Railway with COOKIE_SECURE left to derivation
+        read the default False and refused to boot a correctly configured
+        service.
+
+        `SameSite=None` without `Secure` is ignored by every current browser,
+        so the refresh cookie would be dropped on arrival and the only symptom
+        would be users being logged out unpredictably. Failing at startup is
+        far cheaper to diagnose.
+        """
+        allowed = {"lax", "none", "strict"}
+        value = self.cookie_samesite.lower()
+        if value not in allowed:
+            raise ValueError(
+                f"cookie_samesite must be one of {sorted(allowed)}, got {self.cookie_samesite!r}"
+            )
+        self.cookie_samesite = value
+
+        if value == "none" and not self.cookie_secure:
+            raise ValueError(
+                "COOKIE_SAMESITE=none requires COOKIE_SECURE=true; browsers "
+                "discard a SameSite=None cookie that is not Secure."
+            )
+        return self
+
 
     class Config:
         env_file = ".env"

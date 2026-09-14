@@ -1,4 +1,10 @@
-import { useState } from "react";
+// Paid plans are disabled: there is no billing system, so "Start Pro" and
+// "Start Team" only led to the free signup, and several listed features
+// (shared decks, team analytics, an admin dashboard, priority processing) do
+// not exist. The monthly/yearly toggle and the billing FAQs went with them.
+// Everything is kept below, commented out, for when payments are built.
+//
+// import { useState } from "react";
 import { Link } from "react-router-dom";
 import Footer from "../components/Footer.jsx";
 import Navbar from "../components/Navbar.jsx";
@@ -8,10 +14,11 @@ const PLANS = [
     name: "Free",
     monthlyPrice: 0,
     yearlyPrice: 0,
-    description: "Perfect for getting started",
+    description: "Everything Marigold does today",
     features: [
-      "5 PDFs per month",
-      "Up to 20 flashcards per deck",
+      // Not enforced anywhere in the backend, so not true. Disabled.
+      // "5 PDFs per month",
+      // "Up to 20 flashcards per deck",
       "Unlimited quizzes",
       "Basic quiz history",
     ],
@@ -19,54 +26,55 @@ const PLANS = [
     ctaLink: "/register",
     elevated: false,
   },
-  {
-    name: "Pro",
-    monthlyPrice: 9,
-    yearlyPrice: 7,
-    description: "For serious students",
-    features: [
-      "Unlimited PDFs",
-      "Unlimited flashcards",
-      "Unlimited quizzes",
-      "Full quiz history & analytics",
-      "AI regeneration",
-      "Priority processing",
-    ],
-    cta: "Start Pro",
-    ctaLink: "/register",
-    elevated: true,
-  },
-  {
-    name: "Team",
-    monthlyPrice: 19,
-    yearlyPrice: 15,
-    description: "For study groups & classes",
-    features: [
-      "Everything in Pro",
-      "Up to 10 members",
-      "Shared decks",
-      "Team analytics",
-      "Admin dashboard",
-    ],
-    cta: "Start Team",
-    ctaLink: "/register",
-    elevated: false,
-  },
+  // {
+  //   name: "Pro",
+  //   monthlyPrice: 9,
+  //   yearlyPrice: 7,
+  //   description: "For serious students",
+  //   features: [
+  //     "Unlimited PDFs",
+  //     "Unlimited flashcards",
+  //     "Unlimited quizzes",
+  //     "Full quiz history & analytics",
+  //     "AI regeneration",
+  //     "Priority processing",
+  //   ],
+  //   cta: "Start Pro",
+  //   ctaLink: "/register",
+  //   elevated: true,
+  // },
+  // {
+  //   name: "Team",
+  //   monthlyPrice: 19,
+  //   yearlyPrice: 15,
+  //   description: "For study groups & classes",
+  //   features: [
+  //     "Everything in Pro",
+  //     "Up to 10 members",
+  //     "Shared decks",
+  //     "Team analytics",
+  //     "Admin dashboard",
+  //   ],
+  //   cta: "Start Team",
+  //   ctaLink: "/register",
+  //   elevated: false,
+  // },
 ];
 
 const FAQ = [
-  {
-    q: "Can I cancel anytime?",
-    a: "Yes. You can cancel your subscription at any time. You'll continue to have access until the end of your billing period.",
-  },
-  {
-    q: "What happens to my flashcards if I downgrade?",
-    a: "Your existing decks are preserved. You just won't be able to create new ones beyond the free plan limits.",
-  },
-  {
-    q: "Is there a student discount?",
-    a: "We're working on it. Sign up for the free plan and we'll notify you when student pricing is available.",
-  },
+  // Billing questions describe subscriptions that do not exist. Disabled.
+  // {
+  //   q: "Can I cancel anytime?",
+  //   a: "Yes. You can cancel your subscription at any time. You'll continue to have access until the end of your billing period.",
+  // },
+  // {
+  //   q: "What happens to my flashcards if I downgrade?",
+  //   a: "Your existing decks are preserved. You just won't be able to create new ones beyond the free plan limits.",
+  // },
+  // {
+  //   q: "Is there a student discount?",
+  //   a: "We're working on it. Sign up for the free plan and we'll notify you when student pricing is available.",
+  // },
   {
     q: "What file types do you support?",
     a: "We currently support PDF files. More formats (DOCX, PPTX) are coming soon.",
@@ -75,7 +83,8 @@ const FAQ = [
 
 
 export default function Pricing() {
-  const [yearly, setYearly] = useState(false);
+  // const [yearly, setYearly] = useState(false);
+  const yearly = false;
 
   return (
     <div className="min-h-screen bg-base-100">
@@ -85,11 +94,11 @@ export default function Pricing() {
         <div className="mx-auto max-w-2xl text-center animate-fade-up">
           <h1 className="text-3xl sm:text-4xl">Simple pricing</h1>
           <p className="mt-3 text-base-content/60">
-            Start free. Upgrade when your library outgrows it.
+            {/* Start free. Upgrade when your library outgrows it. */}
+            Marigold is free while it is in early access.
           </p>
 
-          {/* Billing toggle. A label wrapping the input so the whole control is
-              clickable and the checkbox stays the accessible element. */}
+          {/* Billing toggle, disabled with the paid plans.
           <label className="mt-8 inline-flex cursor-pointer items-center gap-3">
             <span className={`text-sm ${yearly ? "text-base-content/50" : "font-medium"}`}>
               Monthly
@@ -105,9 +114,12 @@ export default function Pricing() {
             </span>
             <span className="badge badge-primary badge-sm font-medium">Save 20%</span>
           </label>
+          */}
         </div>
 
-        <div className="stagger mt-12 grid items-start gap-5 lg:grid-cols-3">
+        {/* One column while only the free plan exists. With the paid plans back,
+            restore: className="stagger mt-12 grid items-start gap-5 lg:grid-cols-3" */}
+        <div className="stagger mx-auto mt-12 grid max-w-sm items-start gap-5">
           {PLANS.map((plan) => {
             const price = yearly ? plan.yearlyPrice : plan.monthlyPrice;
             return (

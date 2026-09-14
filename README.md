@@ -101,91 +101,74 @@ alembic upgrade head
 
 ## Deployment
 
-Railway, two services built from two Dockerfiles in this repo:
+Railway: two services built from two Dockerfiles, plus Postgres and Redis.
 
 | Service | Dockerfile | What it runs |
 | --- | --- | --- |
-| API | `backend/Dockerfile` | Alembic migrations, then FastAPI under uvicorn |
-| Frontend | `frontend/Dockerfile` | Vite build, served by nginx with an SPA fallback |
+| `marigold-api` | `backend/Dockerfile` | Alembic migrations, then FastAPI under uvicorn |
+| `marigold-web` | `frontend/Dockerfile` | the React bundle on nginx, which also proxies `/api` to `marigold-api` |
 
-Both build from the repository root, because the API image needs `alembic.ini`
-and `ml/`, which sit above `backend/`.
+The browser only ever talks to `marigold-web`. nginx forwards `/api/*` to the
+API's public URL, so the refresh cookie is first-party: no CORS, no
+`SameSite=None`, and sign-in works in Safari, which drops cross-site cookies.
 
-The two are separate origins, and that has three consequences that are easy to
-miss because each fails silently:
+Both images build from the repository root, because the API image needs
+`alembic.ini` and `ml/`, which sit above `backend/`.
 
-- **`CORS_ORIGINS` must name the frontend's URL.** It is not derived correctly
-  for this layout: the Railway default describes the API's own domain, which
-  the browser never sends as `Origin`.
-- **`COOKIE_SAMESITE` must be `none`.** The refresh token is an `HttpOnly`
-  cookie, and a `Lax` cookie is not sent cross-site, so login appears to work
-  and every session dies at the first token refresh 15 minutes later. `none`
-  requires `COOKIE_SECURE=true`; the config refuses to start on the
-  combination browsers would discard. Note Safari blocks third-party cookies
-  outright and Chrome is phasing them out, so this is the arrangement's real
-  weak point.
-- **`VITE_API_BASE_URL` is a build argument, not a runtime variable.** Vite
-  substitutes it at compile time, so changing it requires rebuilding the
-  frontend service rather than restarting it.
+### Variables
 
-### First deploy
+`marigold-api`:
 
-1. **Create the project.** *New Project → Deploy from GitHub repo*, pick this
-   repository. Do this twice, once per service, both pointed at the same repo.
+| Variable | Value |
+| --- | --- |
+| `SECRET_KEY` | output of `openssl rand -hex 32` |
+| `GEMINI_API_KEY` | Google AI Studio key |
+| `DATABASE_URL` | reference picker: Postgres, `DATABASE_URL` |
+| `REDIS_URL` | reference picker: Redis, `REDIS_URL` |
+| `PUBLIC_URL` | `https://${{marigold-web.RAILWAY_PUBLIC_DOMAIN}}` |
 
-2. **Add the databases.** *New → Database → PostgreSQL*, then again for Redis.
+`marigold-web`:
 
-3. **Configure the API service.** *Settings → Build → Dockerfile Path* =
-   `backend/Dockerfile`, root directory `/`, and *Deploy → Health Check Path* =
-   `/healthz`. Then set its variables:
+| Variable | Value |
+| --- | --- |
+| `BACKEND_URL` | `https://${{marigold-api.RAILWAY_PUBLIC_DOMAIN}}` |
 
-   | Variable | Value |
-   | --- | --- |
-   | `SECRET_KEY` | `openssl rand -hex 32` |
-   | `GEMINI_API_KEY` | Your Google AI Studio key |
-   | `DATABASE_URL` | reference to Postgres, added with the variable picker |
-   | `REDIS_URL` | reference to Redis, added with the variable picker |
-   | `COOKIE_SAMESITE` | `none` |
-   | `CORS_ORIGINS` | the frontend service's URL, once it has one |
-   | `FRONTEND_BASE_URL` | the frontend service's URL |
+The service names inside `${{...}}` must match the Railway service names
+exactly, or Railway passes the text through unresolved.
 
-   Add the two database URLs with Railway's reference picker rather than
-   typing `${{Postgres.DATABASE_URL}}` by hand. A name that does not match the
-   service exactly is passed through as literal text, and the first thing to
-   read it is SQLAlchemy, which fails with `Could not parse SQLAlchemy URL`.
+### Build settings, both services
 
-4. **Configure the frontend service.** *Dockerfile Path* =
-   `frontend/Dockerfile`, health check `/healthz`, and one variable:
+Settings, Build: builder **Dockerfile**, root directory `/`, Dockerfile path
+`backend/Dockerfile` or `frontend/Dockerfile`. Settings, Deploy: health check
+path `/healthz`. Without the builder set to Dockerfile, Railway falls back to
+Railpack, finds no start command, and fails the build.
 
-   | Variable | Value |
-   | --- | --- |
-   | `VITE_API_BASE_URL` | the API service's public URL |
-
-5. **Generate a domain for each** under *Settings → Networking*. This is also
-   what sets `RAILWAY_PUBLIC_DOMAIN`, which the API reads at startup to derive
-   `BACKEND_BASE_URL` and `COOKIE_SECURE` — so redeploy the API afterwards, or
-   it keeps the localhost defaults it booted with.
-
-Because each service needs the other's domain, expect to deploy once, generate
-both domains, fill in the cross-references, and redeploy. The frontend needs a
-rebuild rather than a restart for `VITE_API_BASE_URL` to take.
+### Behaviour worth knowing
 
 Migrations run in the API container's entrypoint, before uvicorn binds. A
-failed migration aborts the start, so the health check never passes and Railway
-keeps the previous deployment serving rather than cutting over to a container
-whose code and schema disagree. That is also why the API service should stay at
-one replica: two starting together would run migrations concurrently, and the
-loser can trip its own health check.
+failed migration aborts the start, the health check never passes, and Railway
+keeps the previous deployment serving. Keep the API at one replica for the same
+reason: concurrent starts would race on the migration.
 
-### Running the split locally
+`marigold-web` refuses to start if `BACKEND_URL` is missing or malformed, and
+says why in its log.
+
+### Disabled until they are built
+
+- **Email delivery.** `EMAIL_BACKEND=console` only logs messages, so the
+  verification gate is off by default and the password reset screens are
+  commented out in `App.jsx`. Configure `EMAIL_BACKEND=ses` to bring both back.
+- **Paid plans.** There is no billing, so the Pro and Team plans and the billing
+  FAQs are commented out in `Pricing.jsx`.
+
+### Running the same shape locally
 
 ```bash
-docker compose --profile web up -d --build   # API on :8000, nginx on :8081
+docker compose --profile web up -d --build   # open http://localhost:8081
 ```
 
-This exercises CORS, but not the cookie: `SameSite=None` requires `Secure`, and
-compose serves plain HTTP. Cross-origin auth can only be verified end to end
-over HTTPS.
+`web` builds `frontend/Dockerfile` and proxies `/api` to the `api` service over
+the compose network, exactly as Railway does.
 
 ## API
 

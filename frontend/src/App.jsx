@@ -13,8 +13,11 @@ import ResultsPage from "./pages/ResultsPage.jsx";
 import Pricing from "./pages/Pricing.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
 import OAuthCallback from "./pages/OAuthCallback.jsx";
-import ForgotPassword from "./pages/ForgotPassword.jsx";
-import ResetPassword from "./pages/ResetPassword.jsx";
+// Password reset is disabled: it works by emailing a link, and no email
+// delivery is configured (EMAIL_BACKEND=console only logs). Uncomment these
+// imports and the two routes below once EMAIL_BACKEND=ses is set up.
+// import ForgotPassword from "./pages/ForgotPassword.jsx";
+// import ResetPassword from "./pages/ResetPassword.jsx";
 import NotFound from "./pages/NotFound.jsx";
 
 /**
@@ -52,8 +55,10 @@ export default function App() {
                 while signed in too — there is no in-app way to change a
                 password, so redirecting a signed-in user who followed their
                 own reset link would strand them. */}
+            {/* Disabled until email delivery exists; see the imports above.
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            */}
 
             {/* --- Signed out only --------------------------------------- */}
             <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />

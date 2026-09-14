@@ -82,9 +82,12 @@ export default function Login() {
         <label className="form-control w-full">
           <div className="label pb-1.5 pt-0">
             <span className="label-text font-medium">Password</span>
+            {/* Disabled with the password reset routes in App.jsx: the reset
+                link is emailed, and no email delivery is configured.
             <Link to="/forgot-password" className="label-text-alt link link-hover">
               Forgot?
             </Link>
+            */}
           </div>
           <input
             type="password"

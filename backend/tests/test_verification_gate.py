@@ -164,18 +164,21 @@ def _walk_dependencies(dependant):
 # The escape hatch
 # ---------------------------------------------------------------------------
 #
-# `require_email_verification=false` exists so the app can be exercised without
-# a working mailbox: with EMAIL_BACKEND=console the only copy of a verification
-# link is in the server log. It is off by default and must stay that way, which
-# is what the first test here pins.
+# The gate is currently DISABLED by default in backend/config.py, because no
+# email delivery is configured and a gate whose link never arrives locks every
+# password signup out. conftest turns it back on for the suite, so everything
+# else in this file still proves the gate works for when it is re-enabled.
 
-def test_the_gate_is_enforced_unless_explicitly_disabled():
-    """A server that configures nothing must gate. The default is the safe one."""
+def test_the_gate_is_off_by_default_until_email_delivery_exists(monkeypatch):
+    """Pins the deliberate default. Flip this test when EMAIL_BACKEND=ses exists."""
     from backend.config import Settings
 
+    # conftest exports REQUIRE_EMAIL_VERIFICATION=true for the rest of the suite;
+    # read the code's own default, not that.
+    monkeypatch.delenv("REQUIRE_EMAIL_VERIFICATION", raising=False)
     settings = Settings(gemini_api_key="fake", secret_key="test")
 
-    assert settings.require_email_verification is True
+    assert settings.require_email_verification is False
 
 
 def test_disabling_the_gate_lets_an_unverified_account_through(client, monkeypatch):

@@ -16,6 +16,10 @@ os.environ.setdefault("GOOGLE_CLIENT_ID", "test-google-client-id")
 os.environ.setdefault("GOOGLE_CLIENT_SECRET", "test-google-client-secret")
 os.environ.setdefault("GITHUB_CLIENT_ID", "test-github-client-id")
 os.environ.setdefault("GITHUB_CLIENT_SECRET", "test-github-client-secret")
+# The verification gate is disabled in the app until email delivery exists,
+# but its code is intact and must keep working for the day it is switched
+# back on. The suite runs with it enforced so that stays true.
+os.environ.setdefault("REQUIRE_EMAIL_VERIFICATION", "true")
 
 import io
 

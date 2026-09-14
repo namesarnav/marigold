@@ -36,10 +36,12 @@ def on_railway(monkeypatch):
 # environment rather than the suite's.
 DERIVED_FIELDS = (
     "RAILWAY_PUBLIC_DOMAIN",
+    "PUBLIC_URL",
     "FRONTEND_BASE_URL",
     "BACKEND_BASE_URL",
     "CORS_ORIGINS",
     "COOKIE_SECURE",
+    "COOKIE_SAMESITE",
 )
 
 
@@ -88,6 +90,80 @@ def test_localhost_defaults_survive_off_railway():
     assert settings.frontend_base_url == "http://localhost:5173"
     assert settings.backend_base_url == "http://localhost:8000"
     assert settings.cookie_secure is False
+
+
+# --- PUBLIC_URL -------------------------------------------------------------
+#
+# The two-service deployment: the browser talks to the frontend service, whose
+# nginx proxies /api to this one. The API's own RAILWAY_PUBLIC_DOMAIN is then the
+# WRONG public address, and PUBLIC_URL has to override it.
+
+WEB_ORIGIN = "https://marigold-web-production.up.railway.app"
+
+
+def test_public_url_beats_the_services_own_railway_domain(on_railway):
+    """OAuth callbacks and emailed links must go to the proxy, not the API host.
+
+    The API host serves only JSON, so a sign-in bounced there dead-ends, and a
+    refresh cookie set there is invisible to the frontend's origin.
+    """
+    settings = Settings(**REQUIRED, public_url=WEB_ORIGIN)
+
+    assert settings.frontend_base_url == WEB_ORIGIN
+    assert settings.backend_base_url == WEB_ORIGIN
+    assert settings.cors_origin_list == [WEB_ORIGIN]
+    assert settings.cookie_secure is True
+
+
+def test_public_url_drops_a_trailing_slash():
+    """Otherwise every derived link gains a double slash."""
+    settings = Settings(**REQUIRED, public_url=WEB_ORIGIN + "/")
+
+    assert settings.frontend_base_url == WEB_ORIGIN
+    assert settings.public_url == WEB_ORIGIN
+
+
+def test_public_url_over_plain_http_does_not_mark_the_cookie_secure():
+    """A Secure cookie is never sent over http, which would break a local proxy."""
+    settings = Settings(**REQUIRED, public_url="http://localhost:8081")
+
+    assert settings.cookie_secure is False
+
+
+def test_public_url_without_a_scheme_is_refused():
+    """"marigold.up.railway.app" alone would produce links with no scheme."""
+    with pytest.raises(ValueError, match="PUBLIC_URL"):
+        Settings(**REQUIRED, public_url="marigold-web-production.up.railway.app")
+
+
+def test_explicit_urls_still_beat_public_url():
+    custom = "https://api.example.com"
+
+    settings = Settings(**REQUIRED, public_url=WEB_ORIGIN, backend_base_url=custom)
+
+    assert settings.backend_base_url == custom
+    assert settings.frontend_base_url == WEB_ORIGIN
+
+
+# --- Cookie SameSite ----------------------------------------------------------
+
+
+def test_samesite_none_boots_when_secure_is_left_to_derivation(on_railway):
+    """Regression: this configuration used to refuse to start.
+
+    The SameSite check ran before _apply_railway_defaults had derived
+    cookie_secure, so it saw the default False and raised. Pydantic runs
+    after-validators in definition order; the check now runs last.
+    """
+    settings = Settings(**REQUIRED, cookie_samesite="none")
+
+    assert settings.cookie_samesite == "none"
+    assert settings.cookie_secure is True
+
+
+def test_samesite_none_without_secure_is_still_refused():
+    with pytest.raises(ValueError, match="COOKIE_SECURE"):
+        Settings(**REQUIRED, cookie_samesite="none", cookie_secure=False)
 
 
 # --- Database URL -----------------------------------------------------------

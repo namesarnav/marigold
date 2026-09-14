@@ -5,11 +5,10 @@
 // of the running container. Changing it on the frontend service requires a
 // rebuild, not a restart.
 //
-// Empty means "same origin", which is correct when one service serves both the
-// API and this bundle. In the split deployment the frontend and the API are
-// different Railway services on different domains, so this must be set to the
-// API service's public URL or every request goes to the static file server and
-// comes back as index.html.
+// Empty means "same origin", and that is what production uses: the frontend
+// service's nginx proxies /api to the API service, so the bundle never needs to
+// know where the API lives. Leave VITE_API_BASE_URL unset for deployment. It
+// exists only for pointing a local build somewhere unusual.
 const BASE = (
   import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV ? "http://localhost:8000" : "")
