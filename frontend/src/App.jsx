@@ -18,6 +18,7 @@ import OAuthCallback from "./pages/OAuthCallback.jsx";
 // imports and the two routes below once EMAIL_BACKEND=ses is set up.
 // import ForgotPassword from "./pages/ForgotPassword.jsx";
 // import ResetPassword from "./pages/ResetPassword.jsx";
+import PlanNotReady from "./pages/PlanNotReady.jsx";
 import NotFound from "./pages/NotFound.jsx";
 
 /**
@@ -40,6 +41,8 @@ export default function App() {
             {/* --- Public ------------------------------------------------ */}
             <Route path="/" element={<Landing />} />
             <Route path="/pricing" element={<Pricing />} />
+            {/* Where the paid plans' buttons go until payments exist. */}
+            <Route path="/checkout/:plan" element={<PlanNotReady />} />
 
             {/* Landing points for a redirect from outside the SPA — the
                 emailed confirmation link, and the OAuth callback. Public

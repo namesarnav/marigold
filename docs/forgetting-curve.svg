@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" width="720" height="340" role="img" aria-label="Predicted recall over 30 days, decaying toward a 0.25 floor with a 7-day half-life">
+<rect width="720" height="340" rx="12" fill="#FFFDF9"/>
+<line x1="64" x2="610" y1="288.0" y2="288.0" stroke="#EADCC7"/>
+<text x="54" y="292.0" text-anchor="end" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">0.00</text>
+<line x1="64" x2="610" y1="223.0" y2="223.0" stroke="#EADCC7"/>
+<text x="54" y="227.0" text-anchor="end" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">0.25</text>
+<line x1="64" x2="610" y1="158.0" y2="158.0" stroke="#EADCC7"/>
+<text x="54" y="162.0" text-anchor="end" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">0.50</text>
+<line x1="64" x2="610" y1="93.0" y2="93.0" stroke="#EADCC7"/>
+<text x="54" y="97.0" text-anchor="end" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">0.75</text>
+<line x1="64" x2="610" y1="28.0" y2="28.0" stroke="#EADCC7"/>
+<text x="54" y="32.0" text-anchor="end" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">1.00</text>
+<line x1="64.0" x2="64.0" y1="288" y2="293" stroke="#76604F"/>
+<text x="64.0" y="309" text-anchor="middle" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">today</text>
+<line x1="191.4" x2="191.4" y1="288" y2="293" stroke="#76604F"/>
+<text x="191.4" y="309" text-anchor="middle" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">day 7</text>
+<line x1="318.8" x2="318.8" y1="288" y2="293" stroke="#76604F"/>
+<text x="318.8" y="309" text-anchor="middle" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">day 14</text>
+<line x1="446.2" x2="446.2" y1="288" y2="293" stroke="#76604F"/>
+<text x="446.2" y="309" text-anchor="middle" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">day 21</text>
+<line x1="573.6" x2="573.6" y1="288" y2="293" stroke="#76604F"/>
+<text x="573.6" y="309" text-anchor="middle" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">day 28</text>
+<line x1="64" x2="610" y1="288" y2="288" stroke="#76604F"/>
+<line x1="64" x2="610" y1="223.0" y2="223.0" stroke="#76604F" stroke-width="1.5" stroke-dasharray="4 5"/>
+<text x="620" y="227.0" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">chance floor</text>
+<polyline points="64.0,54.0 73.1,62.2 82.2,69.9 91.3,77.3 100.4,84.4 109.5,91.1 118.6,97.4 127.7,103.5 136.8,109.3 145.9,114.8 155.0,120.0 164.1,125.0 173.2,129.7 182.3,134.2 191.4,138.5 200.5,142.6 209.6,146.5 218.7,150.2 227.8,153.7 236.9,157.0 246.0,160.2 255.1,163.2 264.2,166.1 273.3,168.9 282.4,171.5 291.5,174.0 300.6,176.4 309.7,178.6 318.8,180.8 327.9,182.8 337.0,184.7 346.1,186.6 355.2,188.3 364.3,190.0 373.4,191.6 382.5,193.1 391.6,194.6 400.7,195.9 409.8,197.2 418.9,198.5 428.0,199.7 437.1,200.8 446.2,201.9 455.3,202.9 464.4,203.9 473.5,204.8 482.6,205.7 491.7,206.5 500.8,207.3 509.9,208.1 519.0,208.8 528.1,209.5 537.2,210.1 546.3,210.7 555.4,211.3 564.5,211.9 573.6,212.4 582.7,212.9 591.8,213.4 600.9,213.9 610.0,214.3" fill="none" stroke="#B7791F" stroke-width="3"/>
+<text x="93.1" y="66.8" font-size="12" font-weight="600" fill="#3B2A1E" font-family="Instrument Sans, Helvetica, Arial, sans-serif">starts at 0.90</text>
+<polyline points="64.0,132.0 73.1,136.4 82.2,140.6 91.3,144.6 100.4,148.3 109.5,152.0 118.6,155.4 127.7,158.7 136.8,161.8 145.9,164.7 155.0,167.5 164.1,170.2 173.2,172.8 182.3,175.2 191.4,177.5 200.5,179.7 209.6,181.8 218.7,183.8 227.8,185.7 236.9,187.5 246.0,189.2 255.1,190.8 264.2,192.4 273.3,193.9 282.4,195.3 291.5,196.6 300.6,197.9 309.7,199.1 318.8,200.2 327.9,201.3 337.0,202.4 346.1,203.4 355.2,204.3 364.3,205.2 373.4,206.1 382.5,206.9 391.6,207.7 400.7,208.4 409.8,209.1 418.9,209.8 428.0,210.4 437.1,211.0 446.2,211.6 455.3,212.2 464.4,212.7 473.5,213.2 482.6,213.7 491.7,214.1 500.8,214.5 509.9,215.0 519.0,215.3 528.1,215.7 537.2,216.1 546.3,216.4 555.4,216.7 564.5,217.0 573.6,217.3 582.7,217.6 591.8,217.8 600.9,218.1 610.0,218.3" fill="none" stroke="#B84E0C" stroke-width="3"/>
+<text x="93.1" y="133.3" font-size="12" font-weight="600" fill="#B84E0C" font-family="Instrument Sans, Helvetica, Arial, sans-serif">starts at 0.60</text>
+<circle cx="191.4" cy="138.5" r="5" fill="#B7791F" stroke="#FFFDF9" stroke-width="2"/>
+<text x="201.4" y="128.5" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">day 7: 0.575</text>
+<text x="16" y="158.0" transform="rotate(-90 16 158.0)" text-anchor="middle" font-size="12" fill="#76604F" font-family="Instrument Sans, Helvetica, Arial, sans-serif">chance of recall</text>
+</svg>
