@@ -4,7 +4,7 @@
 
 @layer base {
   html {
-    /* Winter's own base-100 is near-white; setting it here too stops the
+    /* The theme's base-100 is a warm near-white; setting it here too stops the
        browser painting its default white behind rubber-band scroll. */
     background-color: oklch(var(--b1));
   }
@@ -36,7 +36,7 @@
     @apply mx-auto w-full max-w-5xl px-5 sm:px-8;
   }
 
-  /* A plain bordered surface. Winter's card has no border by default, and
+  /* A plain bordered surface. DaisyUI's card has no border by default, and
      borders read cleaner than shadows on an almost-white ground. */
   .surface {
     @apply rounded-xl border border-base-300 bg-base-100;
