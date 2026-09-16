@@ -68,6 +68,14 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Teach reflection the pgvector type. Without it autogenerate reads
+        # `document_chunks.embedding` back as NullType, warns, and reports the
+        # column as drifted on every run — which the CI drift check would fail.
+        if connection.dialect.name == "postgresql":
+            from pgvector.sqlalchemy import Vector
+
+            connection.dialect.ischema_names["vector"] = Vector
+
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

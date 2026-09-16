@@ -5,6 +5,21 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
+# Width of every stored chunk embedding. A constant rather than a setting
+# because it is baked into the schema: `document_chunks.embedding` is
+# vector(EMBEDDING_DIM), so changing it means a migration and re-embedding every
+# chunk, not an env var flip.
+#
+# 768 rather than the embedding model's native 3072: pgvector's HNSW index on the
+# `vector` type is capped at 2000 dimensions. Google trains its embedding models
+# with Matryoshka representation learning, so truncation is designed for, and
+# lists 768 among its recommended sizes. The only published MTEB-by-dimension
+# figures are for gemini-embedding-001 (768: 67.99, 1536: 68.17); none were
+# found for gemini-embedding-2, so measure with scripts/eval_rag.py rather
+# than assume.
+EMBEDDING_DIM = 768
+
+
 class Settings(BaseSettings):
     gemini_api_key: str
     database_url: str = "sqlite:///./flashlearn.db"
@@ -122,11 +137,47 @@ class Settings(BaseSettings):
     github_client_id: str = ""
     github_client_secret: str = ""
 
+    # --- Card generation ---------------------------------------------------
+    # "full" sends the whole document to Gemini in one call (the original
+    # path). "rag" picks topics, retrieves each topic's chunks, and generates
+    # cards from only those, with citations. Both stay available so they can be
+    # compared by scripts/eval_rag.py; upload and regenerate both obey it.
+    generation_mode: str = "full"  # full | rag
+    gemini_model: str = "gemini-3.6-flash"
+    cards_per_upload: int = 15
+
+    # --- Retrieval (rag mode) ----------------------------------------------
+    gemini_embedding_model: str = "gemini-embedding-2"
+    embedding_batch_size: int = 50
+    rag_top_k: int = 5
+    rag_topic_count: int = 5
+    # Chunk sizes are in estimated tokens; see backend/chunking.py for the
+    # estimate and why it is not an exact count.
+    chunk_target_tokens: int = 650
+    chunk_max_tokens: int = 800
+    chunk_overlap_tokens: int = 100
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     # --- Railway ------------------------------------------------------------
+    @model_validator(mode="after")
+    def _check_generation_mode(self):
+        # A typo here would otherwise fall through to whichever branch the
+        # code checks second, and nothing would say which mode was running.
+        value = self.generation_mode.strip().lower()
+        if value not in {"full", "rag"}:
+            raise ValueError(
+                f"GENERATION_MODE must be 'full' or 'rag', got {self.generation_mode!r}"
+            )
+        self.generation_mode = value
+        if self.chunk_overlap_tokens >= self.chunk_target_tokens:
+            raise ValueError("CHUNK_OVERLAP_TOKENS must be smaller than CHUNK_TARGET_TOKENS")
+        if self.chunk_max_tokens < self.chunk_target_tokens:
+            raise ValueError("CHUNK_MAX_TOKENS must be at least CHUNK_TARGET_TOKENS")
+        return self
+
     @model_validator(mode="after")
     def _normalise_database_url(self):
         """Force a Postgres URL onto the psycopg 3 driver.
