@@ -27,7 +27,10 @@ name: marigold-dev
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector's build of Postgres 16: the stock image plus the `vector`
+    # extension, which document_chunks needs. The extension is installed on the
+    # server, not by pip, so the API image cannot supply it.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: marigold
       POSTGRES_PASSWORD: devpass
@@ -37,7 +40,15 @@ services:
       # already running on the host.
       - "55432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # A new volume, not the old `pgdata`. The previous image was Alpine
+      # (musl) and this one is Debian (glibc); the two sort text differently,
+      # so reusing the old data directory risks silently corrupt text indexes.
+      # The old volume is left in place untouched — see the README for moving
+      # its data across with pg_dump.
+      - pgvector-data:/var/lib/postgresql/data
+      # Creates marigold_test (test suite) and marigold_eval (scripts/eval_rag.py)
+      # on first start. An existing volume skips this: see the README.
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U marigold -d marigold"]
       interval: 5s
@@ -78,6 +89,9 @@ services:
       # .env file next to this one; card generation fails without it, though
       # everything else (auth, quizzes, the interaction log) works fine.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-unset}
+      # full | rag. Listed here because compose passes only the variables it
+      # names into the container; setting it in .env alone does nothing.
+      GENERATION_MODE: ${GENERATION_MODE:-full}
 
       # The Vite dev server calls the API cross-origin. The `web` profile does
       # not need an entry: nginx proxies /api, so its requests are same-origin.
@@ -156,4 +170,4 @@ services:
       - "8081:8080"
 
 volumes:
-  pgdata:
+  pgvector-data:

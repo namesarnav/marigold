@@ -26,7 +26,9 @@ jobs:
       # enforce foreign keys by default and is lax about types — so a
       # SQLite-only suite cannot tell you the app works in production.
       postgres:
-        image: postgres:16
+        # pgvector build: document_chunks needs the `vector` extension, and the
+        # suite exercises real nearest-neighbour queries.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: marigold
           POSTGRES_PASSWORD: testpass
@@ -71,10 +73,17 @@ jobs:
           # A non-empty autogenerate means a model changed without a migration,
           # which would deploy an init container that succeeds against the wrong
           # schema. Catching it here is the whole point.
-          alembic revision --autogenerate -m drift-check
-          if grep -qE '^\s+op\.' backend/migrations/versions/*drift-check*.py; then
+          #
+          # The file is named explicitly (--rev-id) and must exist. This step
+          # used to grep `*drift-check*.py`, but Alembic slugifies the message to
+          # `drift_check`, so the glob never matched, grep exited 2, and the `if`
+          # reported "No schema drift" whatever the models said.
+          alembic revision --autogenerate -m drift-check --rev-id driftcheck
+          drift_file=backend/migrations/versions/driftcheck_drift_check.py
+          test -f "$drift_file"
+          if grep -qE '^\s+op\.' "$drift_file"; then
             echo "::error::Models have drifted from migrations. Generate one with 'alembic revision --autogenerate'."
-            cat backend/migrations/versions/*drift-check*.py
+            cat "$drift_file"
             exit 1
           fi
           echo "No schema drift."

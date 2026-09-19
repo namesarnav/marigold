@@ -1,7 +1,39 @@
 import os
+from urllib.parse import urlparse
+
+# The database the suite runs against: PostgreSQL with pgvector, always.
+#
+# This used to default to in-memory SQLite. It no longer can: retrieval is a
+# pgvector query, and the vector column, the HNSW index and cosine distance do
+# not exist anywhere else. SQLite was also permissive in ways that hid real bugs
+# (it does not enforce foreign keys by default, which is how the regenerate
+# ForeignKeyViolation reached production).
+#
+# The default is the `marigold_test` database docker compose creates next to
+# the dev one:
+#
+#   docker compose up -d postgres
+#   pytest backend/
+#
+# Point TEST_DATABASE_URL elsewhere to use a different server.
+TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://marigold:devpass@localhost:55432/marigold_test",
+)
+
+# Every test drops every table when it finishes. Refuse anything that does not
+# look like a throwaway database, so a mis-set variable cannot wipe the dev
+# database (or worse) on the first test.
+_test_db_name = urlparse(TEST_DATABASE_URL).path.lstrip("/")
+if not _test_db_name.endswith("_test"):
+    raise RuntimeError(
+        f"TEST_DATABASE_URL points at database {_test_db_name!r}. The suite drops "
+        "all tables after every test, so it only runs against a database whose "
+        "name ends in '_test'."
+    )
 
 # Set env vars BEFORE any backend imports (config uses @lru_cache)
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("DATABASE_URL", TEST_DATABASE_URL)
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-tests-only")
 os.environ.setdefault("GEMINI_API_KEY", "fake-api-key")
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
@@ -26,9 +58,8 @@ import io
 import fitz
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 # Clear lru_cache so our env vars take effect before backend modules read config
 from backend.config import get_settings
@@ -38,33 +69,29 @@ get_settings.cache_clear()
 from backend.database import Base, get_db, get_session_factory
 from backend.main import app
 
-# The database the suite runs against.
-#
-# Defaults to in-memory SQLite, which is fast and needs nothing installed. Set
-# TEST_DATABASE_URL to a Postgres URL to run the identical suite against the
-# engine actually used in deployment:
-#
-#   docker run -d -p 55432:5432 -e POSTGRES_PASSWORD=devpass \
-#     -e POSTGRES_USER=marigold -e POSTGRES_DB=marigold postgres:16
-#   TEST_DATABASE_URL=postgresql+psycopg://marigold:devpass@localhost:55432/marigold \
-#     pytest backend/
-#
-# This matters because SQLite is permissive in ways Postgres is not — it does
-# not enforce foreign keys by default, is lax about types, and allows DDL inside
-# a transaction. A suite that only ever sees SQLite cannot tell you the app
-# works on the database it will actually be deployed on.
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "sqlite:///:memory:")
+_test_engine = create_engine(TEST_DATABASE_URL)
 
-if TEST_DATABASE_URL.startswith("sqlite"):
-    # One shared in-memory database across every connection in a test; a normal
-    # pool would hand out connections to separate, empty databases.
-    _test_engine = create_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-else:
-    _test_engine = create_engine(TEST_DATABASE_URL)
+
+def _prepare_database() -> None:
+    """Fail the run up front, with a clear message, if the server is unusable."""
+    try:
+        with _test_engine.begin() as conn:
+            available = conn.execute(
+                text("SELECT 1 FROM pg_available_extensions WHERE name = 'vector'")
+            ).scalar()
+            if not available:
+                raise RuntimeError("the pgvector extension is not installed on this server")
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    except Exception as exc:
+        pytest.exit(
+            f"Test database {TEST_DATABASE_URL!r} is not usable: {exc}\n"
+            "Start it with `docker compose up -d postgres` (the compose file uses "
+            "a pgvector image and creates marigold_test), or set TEST_DATABASE_URL.",
+            returncode=2,
+        )
+
+
+_prepare_database()
 _TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
 
 MOCK_CARDS = [
@@ -95,6 +122,43 @@ def _reset_db():
     Base.metadata.create_all(bind=_test_engine)
     yield
     Base.metadata.drop_all(bind=_test_engine)
+
+
+class _NoNetworkGeminiClient:
+    """Stands in for `google.genai.Client` for the whole suite.
+
+    Tests mock the Gemini-facing functions they exercise. This catches the ones
+    that forget: any code path that reaches for a real client fails loudly
+    instead of making a network call with the placeholder API key.
+    """
+
+    def __init__(self, *args, **kwargs):
+        raise RuntimeError(
+            "A test tried to construct a real Gemini client. Mock the Gemini "
+            "call (see backend/tests/fakes.py) — the suite makes no network calls."
+        )
+
+
+@pytest.fixture(autouse=True)
+def _block_gemini_network(monkeypatch):
+    from google import genai
+
+    monkeypatch.setattr(genai, "Client", _NoNetworkGeminiClient)
+
+
+@pytest.fixture(autouse=True)
+def _fake_embeddings(monkeypatch):
+    """Route every embedding request through the deterministic fake.
+
+    Patched at the one function that makes the request, so the batching, retry
+    and validation code around it runs for real. Tests of that code replace it
+    again with their own fakes.
+    """
+    from backend import embeddings
+    from fakes import fake_embed_api
+
+    monkeypatch.setattr(embeddings, "_client", lambda: object())
+    monkeypatch.setattr(embeddings, "_call_embed_api", fake_embed_api)
 
 
 @pytest.fixture()
