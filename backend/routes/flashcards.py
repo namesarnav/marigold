@@ -4,13 +4,14 @@ from datetime import date
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ..concepts import assign_concepts, log_interaction, resolve_concept_for_card
 from ..database import get_db
 from ..dependencies import get_verified_user
 from ..gemini import generate_flashcards
-from ..models import Document, Flashcard, User, UserStats
+from ..generation import delete_cards, draft_cards, save_cards
+from ..models import Document, Flashcard, FlashcardSource, User, UserStats
 from ..schemas import (
     FlashcardCreate,
     FlashcardOut,
@@ -18,6 +19,7 @@ from ..schemas import (
     StudyReviewRequest,
     StudyReviewResponse,
 )
+from ..sources import sources_for
 
 router = APIRouter(prefix="/api/flashcards", tags=["flashcards"])
 
@@ -45,6 +47,7 @@ def _card_to_out(card: Flashcard) -> FlashcardOut:
         answer=card.answer,
         topic=card.topic,
         options=options,
+        sources=sources_for(card),
     )
 
 
@@ -64,6 +67,8 @@ def get_flashcards(
     _get_doc_for_user(doc_id, current_user.id, db)
     cards = (
         db.query(Flashcard)
+        # Citations and their chunks in two IN queries, not two per card.
+        .options(selectinload(Flashcard.sources).selectinload(FlashcardSource.chunk))
         .filter(Flashcard.doc_id == doc_id)
         .order_by(Flashcard.id.asc())
         .all()
@@ -83,45 +88,29 @@ async def regenerate_flashcards(
     doc = _get_doc_for_user(doc_id, current_user.id, db)
     if doc.status == "processing":
         raise HTTPException(status_code=400, detail="Document is still processing.")
-    if not doc.extracted_text:
+    if not doc.extracted_text and not doc.chunks:
         raise HTTPException(status_code=400, detail="No stored text for this document. Re-upload the PDF.")
 
-    # Deleted one at a time through the ORM, not with a bulk
-    # `query(...).delete()`. The bulk form emits a single raw SQL DELETE and
-    # skips ORM cascades entirely, so `Flashcard.quiz_answers`
-    # (cascade="all, delete-orphan") never ran and any card that had been
-    # answered in a quiz tripped quiz_answers_flashcard_id_fkey — regenerating
-    # worked right up until the user had taken a quiz on the document.
-    #
-    # Interaction rows are deliberately not cascaded: that FK is ON DELETE SET
-    # NULL, so the attempt history the scheduler is built on survives its card.
-    for card in db.query(Flashcard).filter(Flashcard.doc_id == doc_id).all():
-        db.delete(card)
-
-    doc.status = "processing"
-    db.commit()
-
+    # Draft first, swap second. The old cards are deleted only once the new
+    # ones exist, in the same transaction that inserts them — so a failed
+    # generation (rate limit, bad JSON, every card rejected for its citations)
+    # leaves the user's existing deck exactly as it was, instead of empty.
+    previous_status = doc.status
     try:
-        flashcard_data = await generate_flashcards(doc.extracted_text, n=15)
+        drafted = await draft_cards(db, doc, full_generator=generate_flashcards)
     except Exception as e:
-        doc.status = "failed"
+        db.rollback()
+        doc = _get_doc_for_user(doc_id, current_user.id, db)
+        doc.status = previous_status
         db.commit()
         raise HTTPException(status_code=500, detail=f"Failed to generate flashcards: {e}")
 
-    new_cards = []
-    for item in flashcard_data:
-        distractors = item.get("distractors") or []
-        card = Flashcard(
-            doc_id=doc.id,
-            question=item.get("question", "").strip(),
-            answer=item.get("answer", "").strip(),
-            topic=(item.get("topic") or "").strip() or None,
-            distractors=json.dumps(distractors[:3]),
-        )
-        db.add(card)
-        new_cards.append(card)
-
-    db.flush()
+    # One card at a time through the ORM — see generation.delete_cards for why
+    # a bulk delete broke this once. Interaction rows are deliberately not
+    # cascaded: that FK is ON DELETE SET NULL, so the attempt history the
+    # scheduler is built on survives its card.
+    delete_cards(db, doc.id)
+    new_cards = save_cards(db, doc, drafted.cards)
     assign_concepts(db, new_cards, current_user.id)
 
     doc.status = "ready"
