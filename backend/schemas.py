@@ -111,12 +111,28 @@ class DocumentPatch(BaseModel):
 
 
 # Flashcards
+class SourceOut(BaseModel):
+    """One chunk a card was generated from, for "From page N" in the UI.
+
+    `snippet` is the start of the chunk, not a quote the model chose: it is
+    what retrieval actually handed the model, so it cannot misrepresent the
+    source. Pages are 1-based.
+    """
+
+    chunk_id: int
+    page_start: int
+    page_end: int
+    snippet: str
+
+
 class FlashcardOut(BaseModel):
     id: int
     question: str
     answer: str
     topic: Optional[str]
     options: List[str]
+    # Empty for cards from full-mode generation and for hand-written cards.
+    sources: List[SourceOut] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
