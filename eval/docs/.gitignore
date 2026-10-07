@@ -1,0 +1,3 @@
+# Evaluation PDFs stay local by default: they are often copyrighted course
+# material. Remove this file (or force-add) to commit a shared eval set.
+*.pdf

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "description": "Ground truth for retrieval Recall@k (see labels.schema.json). Add one entry per PDF in eval/docs/, keyed by filename; `python -m scripts.eval_rag --write-label-template` generates the skeleton when this file does not exist. Labels with an empty query or empty answer_pages are skipped.",
+  "documents": {
+    "example.pdf": {
+      "labels": [
+        { "query": "", "kind": "question", "answer_pages": [] },
+        { "query": "", "kind": "topic", "answer_pages": [] }
+      ]
+    }
+  }
+}
