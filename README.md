@@ -23,7 +23,7 @@ concepts by how likely you are to have forgotten them.
 - **Cache** — Redis, for login rate-limit counters
 - **Auth** — JWT + bcrypt, email verification, password reset, Google/GitHub OAuth
 - **AI** — Google Gemini for card generation (`GEMINI_MODEL`, default
-  `gemini-3.6-flash`) and embeddings (`GEMINI_EMBEDDING_MODEL`, default
+  `gemini-3.8-flash`) and embeddings (`GEMINI_EMBEDDING_MODEL`, default
   `gemini-embedding-2`); PyMuPDF for PDF text
 - **ML** — PyTorch, sentence-transformers, scikit-learn
 - **Deployment** — Railway, two Docker images: the API, and nginx serving the bundle
@@ -145,7 +145,7 @@ exact rather than going through the HNSW index), and the evaluation are in
 | Variable | Default | |
 | --- | --- | --- |
 | `GENERATION_MODE` | `full` | `full` or `rag` |
-| `GEMINI_MODEL` | `gemini-3.6-flash` | generation model |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | generation model |
 | `GEMINI_EMBEDDING_MODEL` | `gemini-embedding-2` | changing model or dimension means re-embedding every chunk |
 | `CARDS_PER_UPLOAD` | `15` | |
 | `RAG_TOP_K` | `5` | chunks retrieved per topic |

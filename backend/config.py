@@ -143,7 +143,7 @@ class Settings(BaseSettings):
     # cards from only those, with citations. Both stay available so they can be
     # compared by scripts/eval_rag.py; upload and regenerate both obey it.
     generation_mode: str = "full"  # full | rag
-    gemini_model: str = "gemini-3.6-flash"
+    gemini_model: str = "gemini-3.8-flash"
     cards_per_upload: int = 15
 
     # --- Retrieval (rag mode) ----------------------------------------------
