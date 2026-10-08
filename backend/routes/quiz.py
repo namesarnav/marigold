@@ -19,6 +19,7 @@ from ..schemas import (
     QuizStartRequest,
     QuizStartResponse,
 )
+from ..sources import sources_for
 
 router = APIRouter(prefix="/api/quiz", tags=["quiz"])
 
@@ -297,6 +298,9 @@ def get_review(
             "user_answer": a.user_answer,
             "is_correct": a.is_correct == 1 if a.is_correct is not None else None,
             "time_taken_seconds": a.time_taken_seconds,
+            # Shown only here, after the quiz: during it, the source text
+            # would give the answer away.
+            "sources": [s.model_dump() for s in sources_for(card)],
         })
 
     return {"questions": questions}

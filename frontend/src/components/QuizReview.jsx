@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getQuizReview } from "../api.js";
+import SourceCitation from "./SourceCitation.jsx";
 
 export default function QuizReview({ quizId, onRetake, onBack }) {
   const [review, setReview] = useState(null);
@@ -102,6 +103,8 @@ export default function QuizReview({ quizId, onRetake, onBack }) {
                 );
               })}
             </div>
+
+            <SourceCitation sources={q.sources} className="mt-3" />
           </div>
         ))}
       </div>

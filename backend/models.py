@@ -3,7 +3,9 @@ from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Text, Float, Boolean, Date,
     UniqueConstraint, Index,
 )
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import relationship
+from .config import EMBEDDING_DIM
 from .database import Base
 
 
@@ -130,6 +132,78 @@ class Document(Base):
     user = relationship("User", back_populates="documents")
     flashcards = relationship("Flashcard", back_populates="document", cascade="all, delete-orphan")
     quiz_sessions = relationship("QuizSession", back_populates="document", cascade="all, delete-orphan")
+    # Removed by the database (ON DELETE CASCADE), not the ORM: a document can
+    # have hundreds of chunks, each carrying a 768-float embedding, and loading
+    # them all just to delete them row by row would be pure waste. Nothing about
+    # a chunk needs Python-side cleanup.
+    chunks = relationship(
+        "DocumentChunk",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="DocumentChunk.chunk_index",
+    )
+
+
+class DocumentChunk(Base):
+    """A retrievable window of a document's text, with the pages it spans.
+
+    Chunks overlap, so neighbouring rows share text; `chunk_index` is their
+    order within the document. Page numbers are 1-based, as a reader would cite
+    them. `embedding` is NULL until the embedding call succeeds — a document can
+    be chunked and still fail to embed, and full-mode generation does not need
+    the vectors at all.
+    """
+
+    __tablename__ = "document_chunks"
+    __table_args__ = (
+        UniqueConstraint("document_id", "chunk_index", name="uq_document_chunk_index"),
+        # Approximate nearest-neighbour search. Cosine because the embeddings
+        # are normalised and that is the metric the model is trained for.
+        Index(
+            "ix_document_chunks_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    chunk_index = Column(Integer, nullable=False)
+    page_start = Column(Integer, nullable=False)
+    page_end = Column(Integer, nullable=False)
+    text = Column(Text, nullable=False)
+    token_count = Column(Integer, nullable=False)
+    embedding = Column(Vector(EMBEDDING_DIM), nullable=True)
+
+    document = relationship("Document", back_populates="chunks")
+
+
+class FlashcardSource(Base):
+    """A citation: one chunk a flashcard was generated from.
+
+    Both foreign keys cascade at the database level. A citation has no meaning
+    without its card or its chunk, and neither side should have to load these
+    rows to be deleted. This table is never referenced by `interactions`, so
+    removing a card's citations cannot touch attempt history.
+    """
+
+    __tablename__ = "flashcard_sources"
+
+    flashcard_id = Column(
+        Integer, ForeignKey("flashcards.id", ondelete="CASCADE"), primary_key=True
+    )
+    chunk_id = Column(
+        Integer, ForeignKey("document_chunks.id", ondelete="CASCADE"), primary_key=True,
+        index=True,
+    )
+
+    flashcard = relationship("Flashcard", back_populates="sources")
+    chunk = relationship("DocumentChunk")
 
 
 class Flashcard(Base):
@@ -146,6 +220,12 @@ class Flashcard(Base):
     document = relationship("Document", back_populates="flashcards")
     concept = relationship("Concept", back_populates="flashcards")
     quiz_answers = relationship("QuizAnswer", back_populates="flashcard", cascade="all, delete-orphan")
+    sources = relationship(
+        "FlashcardSource",
+        back_populates="flashcard",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     # NOTE: deliberately no `interactions` relationship. Interaction history must
     # outlive the card it came from, so the FK is ON DELETE SET NULL and the ORM is
     # not given a cascade path from Flashcard to Interaction.

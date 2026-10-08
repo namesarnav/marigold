@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Marigold retrieval labels",
+  "description": "Ground truth for Recall@k in scripts/eval_rag.py. Keys under `documents` are PDF filenames in eval/docs/. A label whose query is empty or whose answer_pages is empty is treated as unfilled and skipped.",
+  "type": "object",
+  "required": ["schema_version", "documents"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "description": { "type": "string" },
+    "documents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["labels"],
+        "properties": {
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["query", "kind", "answer_pages"],
+              "properties": {
+                "query": {
+                  "type": "string",
+                  "description": "A topic (\"light-dependent reactions\") or a question (\"Where does the Calvin cycle happen?\"), embedded and searched exactly as generation searches."
+                },
+                "kind": { "enum": ["question", "topic"] },
+                "answer_pages": {
+                  "type": "array",
+                  "items": { "type": "integer", "minimum": 1 },
+                  "description": "1-based page number(s) where the answer appears. A retrieval is a hit if any of the top-k chunks spans any of these pages."
+                },
+                "notes": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

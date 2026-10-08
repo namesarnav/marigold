@@ -25,6 +25,10 @@ backend/.python-version
 .pytest_cache
 
 *md
+# Exceptions to the rule above: the eval reports and the docs/ write-ups are
+# meant to be committed.
+!eval/**/*.md
+!docs/*.md
 openapi.yaml
 */__pycache__
 */*/__pycache__
@@ -32,3 +36,7 @@ openapi.yaml
 # Agent scratch space and worktrees
 .claude/
 .env
+**/__pycache__/
+
+# Local helper script
+run.sh

@@ -235,15 +235,16 @@ def test_uploading_a_pdf_stores_text_without_nul(client, auth_headers, minimal_p
     """
     from backend.routes import documents as documents_module
 
-    real_extract = documents_module._extract_text
+    real_extract_pages = documents_module.extract_pages
 
     def extract_with_nul(file_bytes):
-        # Simulate the broken font encoding that produces NUL, upstream of the
-        # strip, so the whole path is exercised rather than just the helper.
-        text, pages = real_extract(file_bytes)
-        return documents_module._strip_nul("Chapter\x00 One\x00" + text), pages
+        # Simulate the broken font encoding that produces NUL, upstream of
+        # every strip the upload path applies, so the whole path is exercised
+        # rather than just the helper.
+        pages = real_extract_pages(file_bytes)
+        return ["Chapter\x00 One\x00 " + pages[0]] + pages[1:]
 
-    monkeypatch.setattr(documents_module, "_extract_text", extract_with_nul)
+    monkeypatch.setattr(documents_module, "extract_pages", extract_with_nul)
 
     doc_id = upload_doc(client, auth_headers, minimal_pdf)
 
@@ -256,5 +257,9 @@ def test_uploading_a_pdf_stores_text_without_nul(client, auth_headers, minimal_p
         assert stored is not None
         assert "\x00" not in stored.extracted_text
         assert "Chapter One" in stored.extracted_text
+        # The chunks retrieval reads are stored text too.
+        assert stored.chunks
+        assert all("\x00" not in c.text for c in stored.chunks)
+        assert stored.chunks[0].text.startswith("Chapter One")
     finally:
         session.close()

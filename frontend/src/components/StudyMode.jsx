@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { regenerateFlashcards, reviewFlashcard } from "../api.js";
 import { useToast } from "../toast.jsx";
+import SourceCitation from "./SourceCitation.jsx";
 
 export default function StudyMode({ cards: initialCards, docId, onStartQuiz, onBack, onReloadCards }) {
   const [cards, setCards] = useState(initialCards);
@@ -200,6 +201,15 @@ export default function StudyMode({ cards: initialCards, docId, onStartQuiz, onB
           </div>
         </div>
       </div>
+
+      {/* Below the card rather than on it: a click on the card flips it. Only
+          once the answer is showing, because the source passage usually
+          contains the answer. Keyed by card so it starts collapsed each time. */}
+      {flipped && card.sources?.length > 0 && (
+        <div className="mx-auto -mt-2 mb-6 w-full max-w-lg">
+          <SourceCitation key={card.id} sources={card.sources} />
+        </div>
+      )}
 
       <div className="mb-6 flex items-center justify-center gap-4">
         <button
